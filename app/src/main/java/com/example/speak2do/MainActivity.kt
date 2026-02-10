@@ -8,6 +8,7 @@ import android.speech.SpeechRecognizer
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.core.*
@@ -61,6 +62,7 @@ class MainActivity : ComponentActivity() {
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
 
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
@@ -492,8 +494,19 @@ fun HeaderSection() {
         Box(
             modifier = Modifier
                 .size(50.dp)
-                .background(Color(0xFF6C5B7B), RoundedCornerShape(50))
-        )
+                .background(
+                    Brush.linearGradient(listOf(PrimaryPurple, SecondaryIndigo)),
+                    RoundedCornerShape(50)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "N",
+                color = WhiteText,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 
