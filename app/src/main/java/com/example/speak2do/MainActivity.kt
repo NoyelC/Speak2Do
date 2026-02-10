@@ -461,6 +461,14 @@ fun VoiceRecordCard(voiceRecord: VoiceRecord) {
 
 @Composable
 fun HeaderSection() {
+    val currentHour = LocalDateTime.now().hour
+    val greeting = when {
+        currentHour < 12 -> "Good Morning"
+        currentHour < 17 -> "Good Afternoon"
+        else -> "Good Evening"
+    }
+    val todayDate = LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEEE, MMMM d"))
+
     Row(
         modifier = Modifier
             .fillMaxWidth(),
@@ -469,13 +477,13 @@ fun HeaderSection() {
     ) {
         Column {
             Text(
-                text = "Good Morning, Noyel",
+                text = "$greeting, Noyel",
                 fontSize = 24.sp,
                 color = WhiteText,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Tuesday, February 10",
+                text = todayDate,
                 fontSize = 14.sp,
                 color = MutedText
             )
