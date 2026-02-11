@@ -17,6 +17,7 @@ import com.example.speak2do.components.MainScreen
 import com.example.speak2do.data.VoiceRecordEntity
 import com.example.speak2do.model.RecordingItem
 import com.example.speak2do.model.VoiceRecord
+import com.example.speak2do.navigation.AppNavGraph
 import com.example.speak2do.ui.theme.Speak2DoTheme
 import com.example.speak2do.util.formatTime
 import kotlinx.coroutines.Job
@@ -87,6 +88,7 @@ class MainActivity : ComponentActivity() {
                         viewModel.toggleCompleted(id, isCompleted)
                     }
                 )
+                AppNavGraph()
             }
         }
 
