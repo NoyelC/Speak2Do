@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.sp
 import com.example.speak2do.model.RecordingItem
 import com.example.speak2do.ui.theme.CardBackground
 import com.example.speak2do.ui.theme.MutedText
-import com.example.speak2do.ui.theme.PrimaryPurple
+import com.example.speak2do.ui.theme.PrimaryCyan
 import com.example.speak2do.ui.theme.WhiteText
 
 @Composable
@@ -37,7 +37,7 @@ fun RecordingCard(item: RecordingItem, onToggleCompleted: (Long, Boolean) -> Uni
                 checked = item.isCompleted,
                 onCheckedChange = { onToggleCompleted(item.id, item.isCompleted) },
                 colors = CheckboxDefaults.colors(
-                    checkedColor = PrimaryPurple,
+                    checkedColor = PrimaryCyan,
                     uncheckedColor = MutedText,
                     checkmarkColor = WhiteText
                 ),
@@ -86,7 +86,7 @@ fun RecordingCard(item: RecordingItem, onToggleCompleted: (Long, Boolean) -> Uni
 
             Text(
                 text = item.duration,
-                color = PrimaryPurple,
+                color = PrimaryCyan,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )

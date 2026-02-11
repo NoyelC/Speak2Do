@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.sp
 import com.example.speak2do.model.RecordingItem
 import com.example.speak2do.model.VoiceRecord
 import com.example.speak2do.ui.theme.DarkBackground
-import com.example.speak2do.ui.theme.PrimaryPurple
+import com.example.speak2do.ui.theme.PrimaryCyan
 import com.example.speak2do.ui.theme.WhiteText
 
 @Composable
@@ -34,7 +34,7 @@ fun MainScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onMicClick,
-                containerColor = PrimaryPurple,
+                containerColor = PrimaryCyan,
                 modifier = Modifier.size(64.dp)
             ) {
                 Icon(
@@ -106,7 +106,7 @@ fun MainScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Today's Tasks", color = WhiteText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text("View Calendar", color = PrimaryPurple, fontSize = 14.sp)
+                    Text("View Calendar", color = PrimaryCyan, fontSize = 14.sp)
                 }
                 Spacer(Modifier.height(12.dp))
             }

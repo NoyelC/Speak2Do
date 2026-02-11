@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.sp
 import com.example.speak2do.model.VoiceRecord
 import com.example.speak2do.ui.theme.CardBackground
 import com.example.speak2do.ui.theme.MutedText
-import com.example.speak2do.ui.theme.PrimaryPurple
+import com.example.speak2do.ui.theme.PrimaryCyan
 import com.example.speak2do.ui.theme.WhiteText
 
 @Composable
@@ -72,13 +72,13 @@ fun VoiceRecordCard(voiceRecord: VoiceRecord) {
                 Icon(
                     Icons.Rounded.Timer,
                     contentDescription = null,
-                    tint = PrimaryPurple,
+                    tint = PrimaryCyan,
                     modifier = Modifier.size(13.dp)
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
                     text = voiceRecord.duration,
-                    color = PrimaryPurple,
+                    color = PrimaryCyan,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -91,7 +91,7 @@ fun VoiceRecordCard(voiceRecord: VoiceRecord) {
                 .fillMaxWidth()
                 .height(3.dp)
                 .clip(RoundedCornerShape(1.5.dp)),
-            color = PrimaryPurple,
+            color = PrimaryCyan,
             trackColor = CardBackground.copy(alpha = 0.3f)
         )
     }

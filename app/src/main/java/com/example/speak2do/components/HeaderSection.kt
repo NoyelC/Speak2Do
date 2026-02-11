@@ -12,8 +12,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.speak2do.ui.theme.MutedText
-import com.example.speak2do.ui.theme.PrimaryPurple
-import com.example.speak2do.ui.theme.SecondaryIndigo
+import com.example.speak2do.ui.theme.PrimaryCyan
+import com.example.speak2do.ui.theme.LightCyan
 import com.example.speak2do.ui.theme.WhiteText
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -52,7 +52,7 @@ fun HeaderSection() {
             modifier = Modifier
                 .size(50.dp)
                 .background(
-                    Brush.linearGradient(listOf(PrimaryPurple, SecondaryIndigo)),
+                    Brush.linearGradient(listOf(PrimaryCyan, LightCyan)),
                     RoundedCornerShape(50)
                 ),
             contentAlignment = Alignment.Center

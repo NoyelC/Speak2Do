@@ -19,8 +19,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.speak2do.ui.theme.PrimaryPurple
-import com.example.speak2do.ui.theme.SecondaryIndigo
+import com.example.speak2do.ui.theme.PrimaryCyan
+import com.example.speak2do.ui.theme.LightCyan
 import com.example.speak2do.ui.theme.WhiteText
 import com.example.speak2do.util.formatTime
 
@@ -36,7 +36,7 @@ fun VoiceAssistantCard(
             .fillMaxWidth()
             .background(
                 Brush.linearGradient(
-                    listOf(SecondaryIndigo, PrimaryPurple)
+                    listOf(LightCyan, PrimaryCyan)
                 ),
                 RoundedCornerShape(28.dp)
             )
@@ -52,7 +52,7 @@ fun VoiceAssistantCard(
             Box(
                 modifier = Modifier
                     .size(60.dp)
-                    .background(PrimaryPurple, RoundedCornerShape(16.dp)),
+                    .background(PrimaryCyan, RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -152,7 +152,7 @@ fun SiriWaveform(
     barSpacing: Dp = 4.dp,
     maxBarHeight: Dp = 60.dp,
     minBarHeight: Dp = 12.dp,
-    color: Color = Color(0xFF4FC3F7)
+    color: Color = LightCyan
 ) {
     if (!isRecording) return
 
