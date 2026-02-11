@@ -1,6 +1,7 @@
 package com.example.speak2do.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -33,7 +34,9 @@ fun MainScreen(
     recordings: List<RecordingItem>,
     isLoading: Boolean,
     onMicClick: () -> Unit,
-    onToggleCompleted: (Long, Boolean) -> Unit = { _, _ -> }
+    onSeeAllClick: () -> Unit = {},
+    onToggleCompleted: (Long, Boolean) -> Unit = { _, _ -> },
+    onDelete: (Long) -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
 
@@ -102,7 +105,15 @@ fun MainScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("My Tasks", color = WhiteText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("See all", color = PrimaryCyan, fontSize = 14.sp)
+                Text(
+                    "See all",
+                    color = PrimaryCyan,
+                    fontSize = 14.sp,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onSeeAllClick() }
+                        .padding(4.dp)
+                )
             }
         }
 
@@ -140,9 +151,13 @@ fun MainScreen(
                 }
             }
         } else {
-            itemsIndexed(filteredRecordings) { index, item ->
+            itemsIndexed(filteredRecordings, key = { _, item -> item.id }) { index, item ->
                 AnimatedListItem(index = index) {
-                    RecordingCard(item = item, onToggleCompleted = onToggleCompleted)
+                    SwipeableRecordingCard(
+                        item = item,
+                        onToggleCompleted = onToggleCompleted,
+                        onDelete = onDelete
+                    )
                 }
             }
         }

@@ -60,4 +60,10 @@ class VoiceRecordViewModel(application: Application) : AndroidViewModel(applicat
             dao.updateCompleted(id, !currentlyCompleted)
         }
     }
+
+    fun deleteRecord(id: Long) {
+        viewModelScope.launch {
+            dao.deleteById(id)
+        }
+    }
 }

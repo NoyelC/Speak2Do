@@ -16,4 +16,7 @@ interface VoiceRecordDao {
 
     @Query("UPDATE voice_records SET isCompleted = :completed WHERE id = :id")
     suspend fun updateCompleted(id: Long, completed: Boolean)
+
+    @Query("DELETE FROM voice_records WHERE id = :id")
+    suspend fun deleteById(id: Long)
 }

@@ -1,14 +1,25 @@
 package com.example.speak2do.navigation
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -22,9 +33,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
@@ -77,21 +90,53 @@ fun AppNavGraph(onMicClick: () -> Unit) {
     Scaffold(
         containerColor = DarkBackground,
         bottomBar = {
-            BottomNavigationBar(navController)
+            val pendingCount = recordings.count { !it.isCompleted }
+            BottomNavigationBar(navController, pendingCount = pendingCount)
         },
         floatingActionButton = {
             if (currentRoute == BottomNavItem.Home.route) {
-                FloatingActionButton(
-                    onClick = onMicClick,
-                    containerColor = PrimaryCyan,
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Mic,
-                        contentDescription = "Record",
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp)
+                val pulseTransition = rememberInfiniteTransition(label = "fabPulse")
+                val glowAlpha by pulseTransition.animateFloat(
+                    initialValue = 0.2f,
+                    targetValue = 0.6f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1200, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "fabGlowAlpha"
+                )
+                val glowSize by pulseTransition.animateFloat(
+                    initialValue = 72f,
+                    targetValue = 84f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1200, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "fabGlowSize"
+                )
+
+                Box(contentAlignment = Alignment.Center) {
+                    // Glow ring
+                    Box(
+                        modifier = Modifier
+                            .size(glowSize.dp)
+                            .background(
+                                PrimaryCyan.copy(alpha = glowAlpha * 0.4f),
+                                CircleShape
+                            )
                     )
+                    FloatingActionButton(
+                        onClick = onMicClick,
+                        containerColor = PrimaryCyan,
+                        modifier = Modifier.size(64.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Mic,
+                            contentDescription = "Record",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
             }
         }
@@ -121,9 +166,16 @@ fun AppNavGraph(onMicClick: () -> Unit) {
                     recordings = recordings,
                     isLoading = isLoading,
                     onMicClick = onMicClick,
+                    onSeeAllClick = {
+                        navController.navigate(BottomNavItem.Tasks.route) {
+                            popUpTo(navController.graph.startDestinationId)
+                            launchSingleTop = true
+                        }
+                    },
                     onToggleCompleted = { id, completed ->
                         viewModel.toggleCompleted(id, completed)
-                    }
+                    },
+                    onDelete = { id -> viewModel.deleteRecord(id) }
                 )
             }
             composable(BottomNavItem.Tasks.route) {
@@ -132,7 +184,8 @@ fun AppNavGraph(onMicClick: () -> Unit) {
                     isLoading = isLoading,
                     onToggleCompleted = { id, completed ->
                         viewModel.toggleCompleted(id, completed)
-                    }
+                    },
+                    onDelete = { id -> viewModel.deleteRecord(id) }
                 )
             }
             composable(BottomNavItem.Stats.route) {
@@ -145,8 +198,9 @@ fun AppNavGraph(onMicClick: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BottomNavigationBar(navController: NavController) {
+fun BottomNavigationBar(navController: NavController, pendingCount: Int = 0) {
 
     val items = listOf(
         BottomNavItem.Home,
@@ -178,11 +232,33 @@ fun BottomNavigationBar(navController: NavController) {
                     )
                 },
                 icon = {
-                    Icon(
-                        item.icon,
-                        contentDescription = item.label,
-                        tint = if (selected) PrimaryCyan else MutedText
-                    )
+                    if (item == BottomNavItem.Tasks && pendingCount > 0) {
+                        BadgedBox(
+                            badge = {
+                                Badge(
+                                    containerColor = Color(0xFFF44336),
+                                    contentColor = Color.White
+                                ) {
+                                    Text(
+                                        "$pendingCount",
+                                        fontSize = 10.sp
+                                    )
+                                }
+                            }
+                        ) {
+                            Icon(
+                                item.icon,
+                                contentDescription = item.label,
+                                tint = if (selected) PrimaryCyan else MutedText
+                            )
+                        }
+                    } else {
+                        Icon(
+                            item.icon,
+                            contentDescription = item.label,
+                            tint = if (selected) PrimaryCyan else MutedText
+                        )
+                    }
                 },
                 colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
                     indicatorColor = PrimaryCyan.copy(alpha = 0.15f)
