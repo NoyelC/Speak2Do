@@ -29,6 +29,7 @@ import com.example.speak2do.ui.theme.PrimaryCyan
 @Composable
 fun TasksScreen(
     recordings: List<RecordingItem>,
+    isLoading: Boolean = false,
     onToggleCompleted: (Long, Boolean) -> Unit
 ) {
 
@@ -81,7 +82,9 @@ fun TasksScreen(
 
         Spacer(Modifier.height(16.dp))
 
-        if (filteredRecordings.isEmpty()) {
+        if (isLoading) {
+            ShimmerTaskList(count = 4)
+        } else if (filteredRecordings.isEmpty()) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

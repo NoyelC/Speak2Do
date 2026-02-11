@@ -31,6 +31,7 @@ fun MainScreen(
     isRecording: Boolean,
     recordingTime: Int,
     recordings: List<RecordingItem>,
+    isLoading: Boolean,
     onMicClick: () -> Unit,
     onToggleCompleted: (Long, Boolean) -> Unit = { _, _ -> }
 ) {
@@ -105,7 +106,11 @@ fun MainScreen(
             }
         }
 
-        if (filteredRecordings.isEmpty()) {
+        if (isLoading) {
+            item {
+                ShimmerTaskList(count = 3)
+            }
+        } else if (filteredRecordings.isEmpty()) {
             item {
                 Column(
                     modifier = Modifier

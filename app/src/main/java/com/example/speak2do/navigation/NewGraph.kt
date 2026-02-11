@@ -16,8 +16,12 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -45,6 +49,17 @@ fun AppNavGraph(onMicClick: () -> Unit) {
     val spokenText by viewModel.spokenText.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
     val recordingTime by viewModel.recordingTime.collectAsState()
+
+    // Show shimmer until first real data arrives from Room
+    var hasLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(voiceRecordEntities) {
+        if (!hasLoaded) {
+            // Small delay to let Room emit real data; once we get any emission, mark loaded
+            kotlinx.coroutines.delay(600)
+            hasLoaded = true
+        }
+    }
+    val isLoading = !hasLoaded
 
     val recordings = voiceRecordEntities.map { entity ->
         RecordingItem(
@@ -104,6 +119,7 @@ fun AppNavGraph(onMicClick: () -> Unit) {
                     isRecording = isRecording,
                     recordingTime = recordingTime,
                     recordings = recordings,
+                    isLoading = isLoading,
                     onMicClick = onMicClick,
                     onToggleCompleted = { id, completed ->
                         viewModel.toggleCompleted(id, completed)
@@ -113,6 +129,7 @@ fun AppNavGraph(onMicClick: () -> Unit) {
             composable(BottomNavItem.Tasks.route) {
                 TasksScreen(
                     recordings = recordings,
+                    isLoading = isLoading,
                     onToggleCompleted = { id, completed ->
                         viewModel.toggleCompleted(id, completed)
                     }

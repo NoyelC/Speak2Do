@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             Speak2DoTheme {
                 AppNavGraph(onMicClick = { startListening() })
+                
             }
         }
 

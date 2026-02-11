@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import com.example.speak2do.model.RecordingItem
 import com.example.speak2do.ui.theme.CardBackground
 import com.example.speak2do.ui.theme.LightCyan
@@ -36,6 +37,38 @@ fun RecordingCard(item: RecordingItem, onToggleCompleted: (Long, Boolean) -> Uni
         label = "checkboxScale"
     )
 
+    val cardGradient = if (item.isCompleted) {
+        Brush.linearGradient(
+            listOf(
+                Color(0xFF1A2E1A),
+                CardBackground
+            )
+        )
+    } else {
+        Brush.linearGradient(
+            listOf(
+                Color(0xFF0F2A3E),
+                CardBackground
+            )
+        )
+    }
+
+    val borderGradient = if (item.isCompleted) {
+        Brush.linearGradient(
+            listOf(
+                Color(0xFF4CAF50).copy(alpha = 0.3f),
+                Color(0xFF4CAF50).copy(alpha = 0.05f)
+            )
+        )
+    } else {
+        Brush.linearGradient(
+            listOf(
+                PrimaryCyan.copy(alpha = 0.4f),
+                LightCyan.copy(alpha = 0.08f)
+            )
+        )
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -43,10 +76,10 @@ fun RecordingCard(item: RecordingItem, onToggleCompleted: (Long, Boolean) -> Uni
             .clip(RoundedCornerShape(20.dp))
             .border(
                 width = 1.dp,
-                color = if (item.isCompleted) MutedText.copy(alpha = 0.1f) else PrimaryCyan.copy(alpha = 0.12f),
+                brush = borderGradient,
                 shape = RoundedCornerShape(20.dp)
             )
-            .background(CardBackground)
+            .background(cardGradient)
     ) {
         // Left accent bar
         Box(
@@ -55,7 +88,7 @@ fun RecordingCard(item: RecordingItem, onToggleCompleted: (Long, Boolean) -> Uni
                 .fillMaxHeight()
                 .background(
                     if (item.isCompleted)
-                        Brush.verticalGradient(listOf(MutedText.copy(alpha = 0.4f), MutedText.copy(alpha = 0.2f)))
+                        Brush.verticalGradient(listOf(Color(0xFF4CAF50), Color(0xFF2E7D32)))
                     else
                         Brush.verticalGradient(listOf(LightCyan, PrimaryCyan))
                 )
@@ -76,7 +109,7 @@ fun RecordingCard(item: RecordingItem, onToggleCompleted: (Long, Boolean) -> Uni
                     checked = item.isCompleted,
                     onCheckedChange = { onToggleCompleted(item.id, item.isCompleted) },
                     colors = CheckboxDefaults.colors(
-                        checkedColor = PrimaryCyan,
+                        checkedColor = Color(0xFF4CAF50),
                         uncheckedColor = MutedText,
                         checkmarkColor = WhiteText
                     ),
