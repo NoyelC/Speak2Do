@@ -11,12 +11,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.runtime.*
 import androidx.lifecycle.viewModelScope
-import com.example.speak2do.components.MainScreen
 import com.example.speak2do.data.VoiceRecordEntity
-import com.example.speak2do.model.RecordingItem
-import com.example.speak2do.model.VoiceRecord
 import com.example.speak2do.navigation.AppNavGraph
 import com.example.speak2do.ui.theme.Speak2DoTheme
 import com.example.speak2do.util.formatTime
@@ -51,44 +47,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Speak2DoTheme {
-                val voiceRecordEntities by viewModel.voiceRecords.collectAsState()
-                val spokenText by viewModel.spokenText.collectAsState()
-                val isRecording by viewModel.isRecording.collectAsState()
-                val recordingTime by viewModel.recordingTime.collectAsState()
-
-                val voiceRecords = voiceRecordEntities.map { entity ->
-                    VoiceRecord(
-                        text = entity.text,
-                        dateTime = entity.dateTime,
-                        fullDateTime = entity.fullDateTime,
-                        duration = entity.duration,
-                        progress = entity.progress
-                    )
-                }
-
-                val recordings = voiceRecordEntities.map { entity ->
-                    RecordingItem(
-                        id = entity.id,
-                        text = entity.text,
-                        dateTime = entity.dateTime,
-                        duration = "VOICE",
-                        progress = entity.progress,
-                        isCompleted = entity.isCompleted
-                    )
-                }
-
-                MainScreen(
-                    spokenText = spokenText,
-                    isRecording = isRecording,
-                    recordingTime = recordingTime,
-                    recordings = recordings,
-                    voiceRecords = voiceRecords,
-                    onMicClick = { startListening() },
-                    onToggleCompleted = { id, isCompleted ->
-                        viewModel.toggleCompleted(id, isCompleted)
-                    }
-                )
-                AppNavGraph()
+                AppNavGraph(onMicClick = { startListening() })
             }
         }
 

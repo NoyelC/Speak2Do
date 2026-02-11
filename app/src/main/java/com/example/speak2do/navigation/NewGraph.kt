@@ -1,49 +1,129 @@
 package com.example.speak2do.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.speak2do.VoiceRecordViewModel
 import com.example.speak2do.components.MainScreen
 import com.example.speak2do.components.TasksScreen
+import com.example.speak2do.model.RecordingItem
+import com.example.speak2do.ui.theme.CardBackground
 import com.example.speak2do.ui.theme.DarkBackground
+import com.example.speak2do.ui.theme.MutedText
+import com.example.speak2do.ui.theme.PrimaryCyan
 
 @Composable
-fun AppNavGraph() {
+fun AppNavGraph(onMicClick: () -> Unit) {
     val navController = rememberNavController()
+    val viewModel: VoiceRecordViewModel = viewModel()
+
+    val voiceRecordEntities by viewModel.voiceRecords.collectAsState()
+    val spokenText by viewModel.spokenText.collectAsState()
+    val isRecording by viewModel.isRecording.collectAsState()
+    val recordingTime by viewModel.recordingTime.collectAsState()
+
+    val recordings = voiceRecordEntities.map { entity ->
+        RecordingItem(
+            id = entity.id,
+            text = entity.text,
+            dateTime = entity.dateTime,
+            duration = "VOICE",
+            progress = entity.progress,
+            isCompleted = entity.isCompleted
+        )
+    }
+
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
 
     Scaffold(
+        containerColor = DarkBackground,
         bottomBar = {
             BottomNavigationBar(navController)
+        },
+        floatingActionButton = {
+            if (currentRoute == BottomNavItem.Home.route) {
+                FloatingActionButton(
+                    onClick = onMicClick,
+                    containerColor = PrimaryCyan,
+                    modifier = Modifier.size(64.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Mic,
+                        contentDescription = "Record",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
         }
     ) { padding ->
-
         NavHost(
             navController = navController,
             startDestination = BottomNavItem.Home.route,
-            modifier = Modifier.padding(padding)
+            modifier = Modifier.padding(padding),
+            enterTransition = {
+                fadeIn(tween(300)) + slideInHorizontally(tween(300)) { it / 4 }
+            },
+            exitTransition = {
+                fadeOut(tween(300)) + slideOutHorizontally(tween(300)) { -it / 4 }
+            },
+            popEnterTransition = {
+                fadeIn(tween(300)) + slideInHorizontally(tween(300)) { -it / 4 }
+            },
+            popExitTransition = {
+                fadeOut(tween(300)) + slideOutHorizontally(tween(300)) { it / 4 }
+            }
         ) {
-            composable("home") { MainScreen(spokenText = "",
-                isRecording = false,
-                recordingTime = 0,
-                recordings = emptyList(),
-                voiceRecords = emptyList(),
-                onMicClick = {},
-                onToggleCompleted = { _, _ -> }) }
-            composable("tasks") { TasksScreen() }
-            composable("stats") { StatsScreen() }
-            composable("profile") { ProfileScreen() }
+            composable(BottomNavItem.Home.route) {
+                MainScreen(
+                    spokenText = spokenText,
+                    isRecording = isRecording,
+                    recordingTime = recordingTime,
+                    recordings = recordings,
+                    onMicClick = onMicClick,
+                    onToggleCompleted = { id, completed ->
+                        viewModel.toggleCompleted(id, completed)
+                    }
+                )
+            }
+            composable(BottomNavItem.Tasks.route) {
+                TasksScreen(
+                    recordings = recordings,
+                    onToggleCompleted = { id, completed ->
+                        viewModel.toggleCompleted(id, completed)
+                    }
+                )
+            }
+            composable(BottomNavItem.Stats.route) {
+                com.example.speak2do.components.StatsScreen(recordings = recordings)
+            }
+            composable(BottomNavItem.Profile.route) {
+                com.example.speak2do.components.ProfileScreen(recordings = recordings)
+            }
         }
     }
 }
@@ -58,46 +138,40 @@ fun BottomNavigationBar(navController: NavController) {
         BottomNavItem.Profile
     )
 
+    val currentRoute =
+        navController.currentBackStackEntryAsState().value?.destination?.route
+
     NavigationBar(
-        containerColor = DarkBackground
+        containerColor = CardBackground
     ) {
-
-        val currentRoute =
-            navController.currentBackStackEntryAsState().value?.destination?.route
-
         items.forEach { item ->
+            val selected = currentRoute == item.route
             NavigationBarItem(
-                selected = currentRoute == item.route,
+                selected = selected,
                 onClick = {
                     navController.navigate(item.route) {
                         popUpTo(navController.graph.startDestinationId)
                         launchSingleTop = true
                     }
                 },
-                label = { Text(item.label) },
-                icon = { }
+                label = {
+                    Text(
+                        item.label,
+                        color = if (selected) PrimaryCyan else MutedText
+                    )
+                },
+                icon = {
+                    Icon(
+                        item.icon,
+                        contentDescription = item.label,
+                        tint = if (selected) PrimaryCyan else MutedText
+                    )
+                },
+                colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                    indicatorColor = PrimaryCyan.copy(alpha = 0.15f)
+                )
             )
         }
-    }
-}
-
-@Composable
-fun StatsScreen() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text("Stats Screen")
-    }
-}
-
-@Composable
-fun ProfileScreen() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text("Profile Screen")
     }
 }
 
