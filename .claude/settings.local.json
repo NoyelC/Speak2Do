@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git reset:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nRefactor: split MainActivity.kt into separate composable files\n\nExtract composables, data classes, and utilities from the monolithic\nMainActivity.kt \\(733 lines\\) into organized packages: components/,\nmodel/, and util/ for better maintainability and separation of concerns.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nUpdate color palette from purple/indigo to cyan theme\n\nReplace the previous purple \\(#7C4DFF\\) and indigo \\(#4F46E5\\) accent colors\nwith a cyan \\(#00BCD4\\) and light cyan \\(#4DD0E1\\) palette across all\ncomponents, theme config, and splash screen.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)"
+    ]
+  }
+}

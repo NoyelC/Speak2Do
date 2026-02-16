@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -28,6 +29,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var speechRecognizer: SpeechRecognizer
     private var timerJob: Job? = null
     private val viewModel: VoiceRecordViewModel by viewModels()
+    private var isListening = false
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -47,8 +49,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Speak2DoTheme {
-                AppNavGraph(onMicClick = { startListening() })
-
+                AppNavGraph(
+                    onMicClick = { toggleListening() },
+                    onCancelRecording = { cancelListening() }
+                )
             }
         }
 
@@ -77,14 +81,33 @@ class MainActivity : ComponentActivity() {
                         progress = 1f
                     )
 
-                    viewModel.insertVoiceRecord(entity)
+                    viewModel.insertRecord(entity)
                 }
 
                 stopRecording()
             }
 
             override fun onError(error: Int) {
-                stopRecording()
+                Log.d("SpeechRecognizer", "Error code: $error")
+                when (error) {
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> {
+                        // Recognizer is busy — cancel first, then retry after a short delay
+                        speechRecognizer.cancel()
+                        isListening = false
+                        viewModel.viewModelScope.launch {
+                            delay(300)
+                            startListening()
+                        }
+                    }
+                    SpeechRecognizer.ERROR_NO_MATCH,
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
+                        // No speech detected — just stop cleanly
+                        stopRecording()
+                    }
+                    else -> {
+                        stopRecording()
+                    }
+                }
             }
 
             override fun onEndOfSpeech() {
@@ -100,12 +123,34 @@ class MainActivity : ComponentActivity() {
         })
     }
 
+    private fun toggleListening() {
+        if (isListening) {
+            // Stop current session and restart
+            speechRecognizer.cancel()
+            stopRecording()
+            // Small delay to let the recognizer fully release before restarting
+            viewModel.viewModelScope.launch {
+                delay(200)
+                startListening()
+            }
+        } else {
+            startListening()
+        }
+    }
+
+    private fun cancelListening() {
+        speechRecognizer.cancel()
+        stopRecording()
+        viewModel.setSpokenText("")
+    }
+
     private fun startListening() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
         }
 
+        isListening = true
         viewModel.setIsRecording(true)
         viewModel.setRecordingTime(0)
         viewModel.setSpokenText("")
@@ -125,6 +170,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun stopRecording() {
+        isListening = false
         viewModel.setIsRecording(false)
         timerJob?.cancel()
     }

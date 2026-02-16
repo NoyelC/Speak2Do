@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.speak2do.ui.theme.CardBackground
+import com.example.speak2do.ui.theme.ShimmerHighlight
 
 @Composable
 fun ShimmerBrush(): Brush {
@@ -35,7 +36,7 @@ fun ShimmerBrush(): Brush {
     return Brush.linearGradient(
         colors = listOf(
             CardBackground,
-            Color(0xFF2A3D52),
+            ShimmerHighlight,
             CardBackground
         ),
         start = Offset(translateAnim.value - 300f, translateAnim.value - 300f),

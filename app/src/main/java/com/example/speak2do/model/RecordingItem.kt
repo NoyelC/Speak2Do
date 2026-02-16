@@ -6,5 +6,6 @@ data class RecordingItem(
     val dateTime: String,
     val duration: String,
     val progress: Float,
-    val isCompleted: Boolean = false
+    val isCompleted: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis()
 )

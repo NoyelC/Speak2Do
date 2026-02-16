@@ -7,9 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.speak2do"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.speak2do"

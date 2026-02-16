@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 
 class VoiceRecordViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val dao = AppDatabase.getDatabase(application).voiceRecordDao()     //gets access to the database
+    private val dao = AppDatabase.getDatabase(application).voiceRecordDao()
 
     val voiceRecords: StateFlow<List<VoiceRecordEntity>> =
         dao.getAllRecords()
@@ -49,7 +49,7 @@ class VoiceRecordViewModel(application: Application) : AndroidViewModel(applicat
         _recordingTime.value++
     }
 
-    fun insertVoiceRecord(record: VoiceRecordEntity) {
+    fun insertRecord(record: VoiceRecordEntity) {
         viewModelScope.launch {
             dao.insert(record)
         }
@@ -66,4 +66,6 @@ class VoiceRecordViewModel(application: Application) : AndroidViewModel(applicat
             dao.deleteById(id)
         }
     }
+
+    suspend fun getRecordById(id: Long) = dao.getById(id)
 }

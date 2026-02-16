@@ -1,5 +1,6 @@
 package com.example.speak2do.components
 
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,9 +9,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,13 +24,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.speak2do.ui.theme.PrimaryCyan
-import com.example.speak2do.ui.theme.LightCyan
-import com.example.speak2do.ui.theme.WhiteText
+import com.example.speak2do.ui.theme.*
 import com.example.speak2do.util.formatTime
 
 @Composable
@@ -34,55 +38,95 @@ fun VoiceAssistantCard(
     isRecording: Boolean,
     recordingTime: Int,
     spokenText: String,
-    onMicClick: () -> Unit
+    onMicClick: () -> Unit,
+    onCancelRecording: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                Brush.linearGradient(
-                    listOf(LightCyan, PrimaryCyan)
-                ),
-                RoundedCornerShape(28.dp)
+                Brush.linearGradient(listOf(LightCyan, PrimaryCyan)),
+                RoundedCornerShape(Dimens.CardCornerRadius + 8.dp)
             )
-            .padding(20.dp),
+            .padding(Dimens.SpacingXl)
+            .semantics { contentDescription = "Voice assistant card" },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Start,
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PulsingMicIcon(isRecording = isRecording)
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                PulsingMicIcon(isRecording = isRecording)
 
-            Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.width(Dimens.SpacingLg))
 
-            Column {
-                Text("How can I help?", color = WhiteText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    text = "\"Hey Speak2Do, add a meeting...\"",
-                    color = WhiteText.copy(alpha = 0.7f),
-                    fontSize = 13.sp
-                )
+                Column {
+                    Text(
+                        "How can I help?",
+                        color = WhiteText,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "\"Hey Speak2Do, add a meeting...\"",
+                        color = WhiteText.copy(alpha = 0.7f),
+                        fontSize = 13.sp
+                    )
+                }
+            }
+
+            // Cancel button during recording
+            AnimatedVisibility(
+                visible = isRecording,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut()
+            ) {
+                IconButton(
+                    onClick = onCancelRecording,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(
+                            WhiteText.copy(alpha = 0.2f),
+                            CircleShape
+                        )
+                        .semantics { contentDescription = "Cancel recording" }
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Cancel",
+                        tint = WhiteText,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Dimens.SpacingLg))
 
+        // Waveform - shows static when idle, animated when recording
         SiriWaveform(isRecording)
 
-        if (isRecording) {
+        // Recording timer
+        AnimatedVisibility(
+            visible = isRecording,
+            enter = fadeIn(tween(300)) + expandVertically(),
+            exit = fadeOut(tween(200)) + shrinkVertically()
+        ) {
             Row(
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = Dimens.SpacingSm),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
                 Icon(
                     Icons.Rounded.Timer,
-                    contentDescription = null,
+                    contentDescription = "Recording time",
                     tint = WhiteText,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(Dimens.IconSizeSm)
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
@@ -93,54 +137,152 @@ fun VoiceAssistantCard(
             }
         }
 
-        if (spokenText.isNotEmpty()) {
+        // Spoken text with fade-in
+        AnimatedVisibility(
+            visible = spokenText.isNotEmpty(),
+            enter = fadeIn(tween(400)) + slideInVertically { it / 2 },
+            exit = fadeOut(tween(200))
+        ) {
             Text(
                 text = "\"$spokenText\"",
                 color = WhiteText,
-                modifier = Modifier.padding(top = 12.dp),
+                modifier = Modifier.padding(top = Dimens.SpacingMd),
                 fontSize = 14.sp
             )
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Dimens.SpacingMd))
 
-        // Glassmorphism "Tap to Speak" button
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(WhiteText.copy(alpha = 0.15f))
-                .border(
-                    width = 1.dp,
-                    brush = Brush.linearGradient(
-                        listOf(
-                            WhiteText.copy(alpha = 0.4f),
-                            WhiteText.copy(alpha = 0.1f)
-                        )
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                )
-                .clickable { onMicClick() }
-                .padding(vertical = 14.dp),
-            contentAlignment = Alignment.Center
-        ) {
+        // Action buttons
+        if (isRecording) {
+            // When recording: show Stop + Listening side by side
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingSm)
             ) {
-                Icon(
-                    Icons.Default.Mic,
-                    contentDescription = null,
-                    tint = WhiteText,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = if (isRecording) "Listening..." else "Tap to Speak",
-                    color = WhiteText,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                // Stop button
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(Dimens.ButtonCornerRadius))
+                        .background(WhiteText.copy(alpha = 0.25f))
+                        .border(
+                            width = 1.dp,
+                            brush = Brush.linearGradient(
+                                listOf(
+                                    WhiteText.copy(alpha = 0.5f),
+                                    WhiteText.copy(alpha = 0.15f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(Dimens.ButtonCornerRadius)
+                        )
+                        .clickable { onCancelRecording() }
+                        .padding(vertical = 14.dp)
+                        .semantics { contentDescription = "Stop recording" },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Stop,
+                            contentDescription = null,
+                            tint = WhiteText,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Stop",
+                            color = WhiteText,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                // Listening indicator
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(Dimens.ButtonCornerRadius))
+                        .background(WhiteText.copy(alpha = 0.1f))
+                        .padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        // Pulsing dot
+                        val pulseDot = rememberInfiniteTransition(label = "dot")
+                        val dotAlpha by pulseDot.animateFloat(
+                            initialValue = 0.4f,
+                            targetValue = 1f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(600, easing = FastOutSlowInEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "dotAlpha"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(
+                                    ErrorRed.copy(alpha = dotAlpha),
+                                    CircleShape
+                                )
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Listening...",
+                            color = WhiteText.copy(alpha = 0.8f),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        } else {
+            // When idle: show Tap to Speak button
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(Dimens.ButtonCornerRadius))
+                    .background(WhiteText.copy(alpha = 0.15f))
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.linearGradient(
+                            listOf(
+                                WhiteText.copy(alpha = 0.4f),
+                                WhiteText.copy(alpha = 0.1f)
+                            )
+                        ),
+                        shape = RoundedCornerShape(Dimens.ButtonCornerRadius)
+                    )
+                    .clickable { onMicClick() }
+                    .padding(vertical = 14.dp)
+                    .semantics { contentDescription = "Tap to start recording" },
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Default.Mic,
+                        contentDescription = null,
+                        tint = WhiteText,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(Dimens.SpacingSm))
+                    Text(
+                        text = "Tap to Speak",
+                        color = WhiteText,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
     }
@@ -177,7 +319,10 @@ fun PulsingMicIcon(isRecording: Boolean) {
     )
 
     Box(
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.semantics {
+            contentDescription = if (isRecording) "Microphone active" else "Microphone idle"
+        }
     ) {
         // Outer glow ring
         Box(
@@ -205,11 +350,11 @@ fun PulsingMicIcon(isRecording: Boolean) {
                 .size(60.dp)
                 .shadow(
                     elevation = (8 * glowAlpha).dp,
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(Dimens.ButtonCornerRadius),
                     ambientColor = LightCyan,
                     spotColor = LightCyan
                 )
-                .background(PrimaryCyan, RoundedCornerShape(16.dp)),
+                .background(PrimaryCyan, RoundedCornerShape(Dimens.ButtonCornerRadius)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -231,17 +376,15 @@ fun SiriWaveform(
     maxBarHeight: Dp = 60.dp,
     minBarHeight: Dp = 12.dp
 ) {
-    if (!isRecording) return
-
     val transition = rememberInfiniteTransition(label = "siriWave")
 
     val bars = List(barCount) { index ->
         transition.animateFloat(
             initialValue = minBarHeight.value,
-            targetValue = maxBarHeight.value,
+            targetValue = if (isRecording) maxBarHeight.value else minBarHeight.value + 6f,
             animationSpec = infiniteRepeatable(
                 animation = tween(
-                    durationMillis = 500 + index * 35,
+                    durationMillis = if (isRecording) 500 + index * 35 else 1200 + index * 50,
                     easing = FastOutSlowInEasing
                 ),
                 repeatMode = RepeatMode.Reverse
@@ -253,7 +396,7 @@ fun SiriWaveform(
     Row(
         modifier = Modifier
             .height(maxBarHeight)
-            .padding(top = 16.dp),
+            .padding(top = Dimens.SpacingLg),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
@@ -265,7 +408,10 @@ fun SiriWaveform(
                     .clip(RoundedCornerShape(50))
                     .background(
                         Brush.verticalGradient(
-                            listOf(WhiteText, LightCyan)
+                            listOf(
+                                WhiteText.copy(alpha = if (isRecording) 1f else 0.3f),
+                                LightCyan.copy(alpha = if (isRecording) 1f else 0.2f)
+                            )
                         )
                     )
             )

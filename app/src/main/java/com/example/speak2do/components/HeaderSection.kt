@@ -1,25 +1,29 @@
 package com.example.speak2do.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.speak2do.ui.theme.MutedText
-import com.example.speak2do.ui.theme.PrimaryCyan
-import com.example.speak2do.ui.theme.LightCyan
-import com.example.speak2do.ui.theme.WhiteText
+import com.example.speak2do.ui.theme.*
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun HeaderSection() {
+fun HeaderSection(
+    userName: String = "Noyel",
+    onAvatarClick: () -> Unit = {}
+) {
     val currentHour = LocalDateTime.now().hour
     val greeting = when {
         currentHour < 12 -> "Good Morning"
@@ -30,13 +34,14 @@ fun HeaderSection() {
 
     Row(
         modifier = Modifier
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .semantics { contentDescription = "$greeting $userName, $todayDate" },
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
             Text(
-                text = "$greeting, Noyel",
+                text = "$greeting, $userName",
                 fontSize = 24.sp,
                 color = WhiteText,
                 fontWeight = FontWeight.Bold
@@ -51,14 +56,17 @@ fun HeaderSection() {
         Box(
             modifier = Modifier
                 .size(50.dp)
+                .clip(RoundedCornerShape(50))
                 .background(
                     Brush.linearGradient(listOf(PrimaryCyan, LightCyan)),
                     RoundedCornerShape(50)
-                ),
+                )
+                .clickable { onAvatarClick() }
+                .semantics { contentDescription = "Profile avatar for $userName" },
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "N",
+                text = userName.firstOrNull()?.uppercase() ?: "?",
                 color = WhiteText,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold
