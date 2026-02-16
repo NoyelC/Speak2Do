@@ -69,7 +69,8 @@ fun AppNavGraph(
     onMicClick: () -> Unit,
     onCancelRecording: () -> Unit = {},
     userName: String = "User",
-    onSignOut: () -> Unit = {}
+    onSignOut: () -> Unit = {},
+    onUpdateName: (String) -> Unit = {}
 ) {
     val navController = rememberNavController()
     val viewModel: VoiceRecordViewModel = viewModel()
@@ -138,53 +139,53 @@ fun AppNavGraph(
             BottomNavigationBar(navController, pendingCount = pendingCount)
         },
         floatingActionButton = {
-            // FAB visible on all tabs
-            val pulseTransition = rememberInfiniteTransition(label = "fabPulse")
-            val glowAlpha by pulseTransition.animateFloat(
-                initialValue = 0.2f,
-                targetValue = 0.6f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(1200, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "fabGlowAlpha"
-            )
-            val glowSize by pulseTransition.animateFloat(
-                initialValue = 72f,
-                targetValue = 84f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(1200, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "fabGlowSize"
-            )
-
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.semantics {
-                    contentDescription = "Record new task"
-                }
-            ) {
-                // Glow ring
-                Box(
-                    modifier = Modifier
-                        .size(glowSize.dp)
-                        .background(
-                            PrimaryCyan.copy(alpha = glowAlpha * 0.4f),
-                            CircleShape
-                        )
+            if (currentRoute == BottomNavItem.Home.route) {
+                val pulseTransition = rememberInfiniteTransition(label = "fabPulse")
+                val glowAlpha by pulseTransition.animateFloat(
+                    initialValue = 0.2f,
+                    targetValue = 0.6f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1200, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "fabGlowAlpha"
                 )
-                FloatingActionButton(
-                    onClick = onMicClick,
-                    containerColor = PrimaryCyan,
-                    modifier = Modifier.size(64.dp)
+                val glowSize by pulseTransition.animateFloat(
+                    initialValue = 72f,
+                    targetValue = 84f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1200, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "fabGlowSize"
+                )
+
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.semantics {
+                        contentDescription = "Record new task"
+                    }
                 ) {
-                    Icon(
-                        Icons.Default.Mic,
-                        contentDescription = "Record voice task",
-                        tint = Color.White,
-                        modifier = Modifier.size(Dimens.IconSizeLg)
+                    Box(
+                        modifier = Modifier
+                            .size(glowSize.dp)
+                            .background(
+                                PrimaryCyan.copy(alpha = glowAlpha * 0.4f),
+                                CircleShape
+                            )
                     )
+                    FloatingActionButton(
+                        onClick = onMicClick,
+                        containerColor = PrimaryCyan,
+                        modifier = Modifier.size(64.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Mic,
+                            contentDescription = "Record voice task",
+                            tint = Color.White,
+                            modifier = Modifier.size(Dimens.IconSizeLg)
+                        )
+                    }
                 }
             }
         }
@@ -251,7 +252,8 @@ fun AppNavGraph(
                 com.example.speak2do.components.ProfileScreen(
                     recordings = recordings,
                     userName = userName,
-                    onSignOut = onSignOut
+                    onSignOut = onSignOut,
+                    onUpdateName = onUpdateName
                 )
             }
         }

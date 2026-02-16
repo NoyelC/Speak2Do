@@ -9,10 +9,15 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.lifecycle.viewModelScope
+import com.example.speak2do.auth.AuthViewModel
+import com.example.speak2do.auth.NameSetupScreen
+import com.example.speak2do.auth.PhoneLoginScreen
 import com.example.speak2do.data.VoiceRecordEntity
 import com.example.speak2do.navigation.AppNavGraph
 import com.example.speak2do.ui.theme.Speak2DoTheme
@@ -29,6 +34,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var speechRecognizer: SpeechRecognizer
     private var timerJob: Job? = null
     private val viewModel: VoiceRecordViewModel by viewModels()
+    private val authViewModel: AuthViewModel by viewModels()
     private var isListening = false
 
     private val requestPermissionLauncher =
@@ -49,10 +55,33 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Speak2DoTheme {
-                AppNavGraph(
-                    onMicClick = { toggleListening() },
-                    onCancelRecording = { cancelListening() }
-                )
+                val authState by authViewModel.authState.collectAsState()
+                val currentUser = authState.user
+                val hasDisplayName = !currentUser?.displayName.isNullOrBlank()
+
+                if (currentUser == null) {
+                    PhoneLoginScreen(
+                        state = authState,
+                        onSendOtp = { phone -> authViewModel.sendOtp(this@MainActivity, phone) },
+                        onVerifyOtp = { otp -> authViewModel.verifyOtp(otp) },
+                        onClearError = { authViewModel.clearError() }
+                    )
+                } else if (!hasDisplayName) {
+                    NameSetupScreen(
+                        isLoading = authState.isLoading,
+                        error = authState.error,
+                        onSaveName = { name -> authViewModel.updateDisplayName(name) },
+                        onClearError = { authViewModel.clearError() }
+                    )
+                } else {
+                    AppNavGraph(
+                        onMicClick = { toggleListening() },
+                        onCancelRecording = { cancelListening() },
+                        userName = currentUser?.displayName ?: "User",
+                        onSignOut = { authViewModel.signOut() },
+                        onUpdateName = { name -> authViewModel.updateDisplayName(name) }
+                    )
+                }
             }
         }
 

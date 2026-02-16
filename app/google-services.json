@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "191036225154",
+    "project_id": "speak2do-e71c0",
+    "storage_bucket": "speak2do-e71c0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:191036225154:android:9e45ae0c5290acf79da69b",
+        "android_client_info": {
+          "package_name": "com.example.speak2do"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDSd7dZ6zYJq72SpmDGbtcs6nxYWkNkBXI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

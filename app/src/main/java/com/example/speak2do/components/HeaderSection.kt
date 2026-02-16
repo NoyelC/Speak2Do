@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.speak2do.ui.theme.*
@@ -39,12 +40,21 @@ fun HeaderSection(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "$greeting, $userName",
+                text = greeting,
+                fontSize = 20.sp,
+                color = MutedText,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
+            )
+            Text(
+                text = userName.ifBlank { "User" },
                 fontSize = 24.sp,
                 color = WhiteText,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = todayDate,
@@ -52,6 +62,8 @@ fun HeaderSection(
                 color = MutedText
             )
         }
+
+        Spacer(Modifier.width(12.dp))
 
         Box(
             modifier = Modifier

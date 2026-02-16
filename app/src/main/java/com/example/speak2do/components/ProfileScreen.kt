@@ -7,19 +7,34 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Logout
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +48,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.speak2do.model.RecordingItem
@@ -42,13 +59,16 @@ import com.example.speak2do.ui.theme.*
 fun ProfileScreen(
     recordings: List<RecordingItem>,
     userName: String = "Noyel",
-    onSignOut: () -> Unit = {}
+    onSignOut: () -> Unit = {},
+    onUpdateName: (String) -> Unit = {}
 ) {
     val total = recordings.size
     val completed = recordings.count { it.isCompleted }
     val pending = total - completed
 
     var showAbout by remember { mutableStateOf(false) }
+    var showEditName by remember { mutableStateOf(false) }
+    var draftName by remember { mutableStateOf(userName) }
 
     LazyColumn(
         modifier = Modifier
@@ -68,45 +88,56 @@ fun ProfileScreen(
             )
         }
 
-        // Avatar + Name
         item {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(
+                Column(
                     modifier = Modifier
-                        .size(80.dp)
-                        .background(
-                            Brush.linearGradient(listOf(PrimaryCyan, LightCyan)),
-                            CircleShape
-                        )
-                        .semantics { contentDescription = "Profile avatar for $userName" },
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(Dimens.CardCornerRadius))
+                        .background(CardBackground)
+                        .padding(horizontal = Dimens.SpacingLg, vertical = Dimens.SpacingXl)
+                        .semantics { contentDescription = "Profile card for $userName" },
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(84.dp)
+                            .background(
+                                Brush.linearGradient(listOf(PrimaryCyan, LightCyan)),
+                                CircleShape
+                            )
+                            .semantics { contentDescription = "Profile avatar for $userName" },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = userName.firstOrNull()?.uppercase() ?: "?",
+                            color = WhiteText,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(Modifier.height(Dimens.SpacingMd))
                     Text(
-                        text = userName.firstOrNull()?.uppercase() ?: "?",
+                        text = userName.ifBlank { "User" },
                         color = WhiteText,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "Speak2Do User",
+                        color = MutedText,
+                        fontSize = 14.sp
                     )
                 }
-                Spacer(Modifier.height(Dimens.SpacingMd))
-                Text(
-                    text = userName,
-                    color = WhiteText,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Speak2Do User",
-                    color = MutedText,
-                    fontSize = 14.sp
-                )
             }
         }
 
-        // Task summary card
         item {
             Row(
                 modifier = Modifier
@@ -123,7 +154,6 @@ fun ProfileScreen(
             }
         }
 
-        // Settings section
         item {
             Text(
                 text = "Settings",
@@ -159,13 +189,21 @@ fun ProfileScreen(
                     onClick = {}
                 )
                 SettingsItem(
+                    icon = Icons.Rounded.Edit,
+                    label = "Edit Name",
+                    subtitle = userName.ifBlank { "User" },
+                    onClick = {
+                        draftName = userName
+                        showEditName = true
+                    }
+                )
+                SettingsItem(
                     icon = Icons.Rounded.Info,
                     label = "About",
                     showDivider = false,
                     onClick = { showAbout = !showAbout }
                 )
 
-                // About section (expandable)
                 AnimatedVisibility(
                     visible = showAbout,
                     enter = fadeIn() + expandVertically(),
@@ -199,7 +237,6 @@ fun ProfileScreen(
             }
         }
 
-        // Sign out
         item {
             Column(
                 modifier = Modifier
@@ -219,6 +256,38 @@ fun ProfileScreen(
         item {
             Spacer(Modifier.height(Dimens.SpacingXl))
         }
+    }
+
+    if (showEditName) {
+        AlertDialog(
+            onDismissRequest = { showEditName = false },
+            title = { Text("Edit Profile Name", color = WhiteText) },
+            text = {
+                OutlinedTextField(
+                    value = draftName,
+                    onValueChange = { draftName = it },
+                    singleLine = true,
+                    label = { Text("Name") }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val trimmed = draftName.trim()
+                        if (trimmed.isNotEmpty()) {
+                            onUpdateName(trimmed)
+                            showEditName = false
+                        }
+                    }
+                ) { Text("Save", color = PrimaryCyan) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditName = false }) {
+                    Text("Cancel", color = MutedText)
+                }
+            },
+            containerColor = CardBackground
+        )
     }
 }
 
