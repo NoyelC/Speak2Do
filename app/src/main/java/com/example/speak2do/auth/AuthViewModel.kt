@@ -99,6 +99,14 @@ class AuthViewModel : ViewModel() {
         _authState.value = AuthState()
     }
 
+    fun backToPhoneEntry() {
+        _authState.value = _authState.value.copy(
+            isCodeSent = false,
+            verificationId = null,
+            error = null
+        )
+    }
+
     fun updateDisplayName(name: String) {
         val trimmed = name.trim()
         if (trimmed.isBlank()) {

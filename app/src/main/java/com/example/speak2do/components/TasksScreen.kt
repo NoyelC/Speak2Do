@@ -26,10 +26,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -62,6 +66,7 @@ import com.example.speak2do.ui.theme.WarningOrange
 import com.example.speak2do.ui.theme.WhiteText
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -73,11 +78,16 @@ fun TasksScreen(
     recordings: List<RecordingItem>,
     isLoading: Boolean = false,
     onToggleCompleted: (Long, Boolean) -> Unit,
-    onDelete: (Long) -> Unit = {}
+    onDelete: (Long) -> Unit = {},
+    onAddEvent: (LocalDate, String, String, String) -> Unit = { _, _, _, _ -> }
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+    var showAddEventDialog by remember { mutableStateOf(false) }
+    var eventTitle by remember { mutableStateOf("") }
+    var eventTime by remember { mutableStateOf("09:00") }
+    var eventNotes by remember { mutableStateOf("") }
 
     val tabs = listOf("All", "Today", "Upcoming")
 
@@ -174,7 +184,7 @@ fun TasksScreen(
                 }
             )
 
-            AnimatedVisibility(visible = selectedDate != null) {
+            androidx.compose.animation.AnimatedVisibility(visible = selectedDate != null) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -193,6 +203,18 @@ fun TasksScreen(
                         fontSize = 13.sp,
                         modifier = Modifier.clickable { selectedDate = null }
                     )
+                }
+            }
+            androidx.compose.animation.AnimatedVisibility(visible = selectedDate != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = Dimens.SpacingSm),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Button(onClick = { showAddEventDialog = true }) {
+                        Text("Add Event")
+                    }
                 }
             }
 
@@ -311,6 +333,65 @@ fun TasksScreen(
             color = PrimaryCyan
         )
     }
+
+    if (showAddEventDialog && selectedDate != null) {
+        AlertDialog(
+            onDismissRequest = { showAddEventDialog = false },
+            title = { Text("Add Event", color = WhiteText) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = eventTitle,
+                        onValueChange = { eventTitle = it },
+                        singleLine = true,
+                        label = { Text("Title") }
+                    )
+                    OutlinedTextField(
+                        value = eventTime,
+                        onValueChange = {
+                            eventTime = it.filter { c -> c.isDigit() || c == ':' }.take(5)
+                        },
+                        singleLine = true,
+                        label = { Text("Time (HH:mm)") }
+                    )
+                    OutlinedTextField(
+                        value = eventNotes,
+                        onValueChange = { eventNotes = it },
+                        label = { Text("Notes") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (eventTitle.trim().isNotEmpty()) {
+                            val normalizedTime = try {
+                                LocalTime.parse(eventTime).toString().take(5)
+                            } catch (_: Exception) {
+                                "09:00"
+                            }
+                            onAddEvent(
+                                selectedDate!!,
+                                eventTitle.trim(),
+                                normalizedTime,
+                                eventNotes.trim()
+                            )
+                            eventTitle = ""
+                            eventTime = "09:00"
+                            eventNotes = ""
+                            showAddEventDialog = false
+                        }
+                    }
+                ) { Text("Save", color = PrimaryCyan) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddEventDialog = false }) {
+                    Text("Cancel", color = MutedText)
+                }
+            },
+            containerColor = CardBackground
+        )
+    }
 }
 
 @Composable
@@ -343,8 +424,7 @@ private fun TasksCalendarCard(
             .pointerInput(visibleMonth) {
                 var dragDistance = 0f
                 detectHorizontalDragGestures(
-                    onHorizontalDrag = { change, dragAmount ->
-                        change.consume()
+                    onHorizontalDrag = { _, dragAmount ->
                         dragDistance += dragAmount
                     },
                     onDragEnd = {

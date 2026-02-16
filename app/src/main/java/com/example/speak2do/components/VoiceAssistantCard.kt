@@ -44,6 +44,7 @@ fun VoiceAssistantCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 340.dp)
             .background(
                 Brush.linearGradient(listOf(LightCyan, PrimaryCyan)),
                 RoundedCornerShape(Dimens.CardCornerRadius + 8.dp)
@@ -81,7 +82,7 @@ fun VoiceAssistantCard(
             }
 
             // Cancel button during recording
-            AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = isRecording,
                 enter = fadeIn() + scaleIn(),
                 exit = fadeOut() + scaleOut()
@@ -112,43 +113,54 @@ fun VoiceAssistantCard(
         SiriWaveform(isRecording)
 
         // Recording timer
-        AnimatedVisibility(
-            visible = isRecording,
-            enter = fadeIn(tween(300)) + expandVertically(),
-            exit = fadeOut(tween(200)) + shrinkVertically()
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(26.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Row(
-                modifier = Modifier.padding(top = Dimens.SpacingSm),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isRecording,
+                enter = fadeIn(tween(300)) + expandVertically(),
+                exit = fadeOut(tween(200)) + shrinkVertically()
             ) {
-                Icon(
-                    Icons.Rounded.Timer,
-                    contentDescription = "Recording time",
-                    tint = WhiteText,
-                    modifier = Modifier.size(Dimens.IconSizeSm)
-                )
-                Spacer(Modifier.width(6.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.Timer,
+                        contentDescription = "Recording time",
+                        tint = WhiteText,
+                        modifier = Modifier.size(Dimens.IconSizeSm)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = formatTime(recordingTime),
+                        color = WhiteText,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(34.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = spokenText.isNotEmpty(),
+                enter = fadeIn(tween(400)) + slideInVertically { it / 2 },
+                exit = fadeOut(tween(200))
+            ) {
                 Text(
-                    text = formatTime(recordingTime),
+                    text = "\"$spokenText\"",
                     color = WhiteText,
                     fontSize = 14.sp
                 )
             }
-        }
-
-        // Spoken text with fade-in
-        AnimatedVisibility(
-            visible = spokenText.isNotEmpty(),
-            enter = fadeIn(tween(400)) + slideInVertically { it / 2 },
-            exit = fadeOut(tween(200))
-        ) {
-            Text(
-                text = "\"$spokenText\"",
-                color = WhiteText,
-                modifier = Modifier.padding(top = Dimens.SpacingMd),
-                fontSize = 14.sp
-            )
         }
 
         Spacer(Modifier.height(Dimens.SpacingMd))
@@ -290,14 +302,36 @@ fun VoiceAssistantCard(
 
 @Composable
 fun PulsingMicIcon(isRecording: Boolean) {
+    if (!isRecording) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.semantics { contentDescription = "Microphone idle" }
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(60.dp)
+                    .background(PrimaryCyan, RoundedCornerShape(Dimens.ButtonCornerRadius)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Mic,
+                    contentDescription = "Microphone",
+                    tint = Color.White,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+        }
+        return
+    }
+
     val infiniteTransition = rememberInfiniteTransition(label = "micPulse")
 
     val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = if (isRecording) 0.3f else 0.1f,
-        targetValue = if (isRecording) 0.8f else 0.35f,
+        initialValue = 0.3f,
+        targetValue = 0.8f,
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = if (isRecording) 600 else 1500,
+                durationMillis = 600,
                 easing = FastOutSlowInEasing
             ),
             repeatMode = RepeatMode.Reverse
@@ -307,10 +341,10 @@ fun PulsingMicIcon(isRecording: Boolean) {
 
     val glowScale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = if (isRecording) 1.25f else 1.1f,
+        targetValue = 1.25f,
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = if (isRecording) 600 else 1500,
+                durationMillis = 600,
                 easing = FastOutSlowInEasing
             ),
             repeatMode = RepeatMode.Reverse
@@ -376,15 +410,44 @@ fun SiriWaveform(
     maxBarHeight: Dp = 60.dp,
     minBarHeight: Dp = 12.dp
 ) {
+    if (!isRecording) {
+        Row(
+            modifier = Modifier
+                .height(maxBarHeight)
+                .padding(top = Dimens.SpacingLg),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            repeat(barCount) {
+                Box(
+                    modifier = Modifier
+                        .width(barWidth)
+                        .height((minBarHeight.value + 4f).dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    WhiteText.copy(alpha = 0.25f),
+                                    LightCyan.copy(alpha = 0.2f)
+                                )
+                            )
+                        )
+                )
+                Spacer(modifier = Modifier.width(barSpacing))
+            }
+        }
+        return
+    }
+
     val transition = rememberInfiniteTransition(label = "siriWave")
 
     val bars = List(barCount) { index ->
         transition.animateFloat(
             initialValue = minBarHeight.value,
-            targetValue = if (isRecording) maxBarHeight.value else minBarHeight.value + 6f,
+            targetValue = maxBarHeight.value,
             animationSpec = infiniteRepeatable(
                 animation = tween(
-                    durationMillis = if (isRecording) 500 + index * 35 else 1200 + index * 50,
+                    durationMillis = 500 + index * 35,
                     easing = FastOutSlowInEasing
                 ),
                 repeatMode = RepeatMode.Reverse
@@ -409,8 +472,8 @@ fun SiriWaveform(
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                WhiteText.copy(alpha = if (isRecording) 1f else 0.3f),
-                                LightCyan.copy(alpha = if (isRecording) 1f else 0.2f)
+                                WhiteText.copy(alpha = 1f),
+                                LightCyan.copy(alpha = 1f)
                             )
                         )
                     )

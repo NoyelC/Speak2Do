@@ -60,7 +60,7 @@ fun SearchBar(
                         innerTextField()
                     }
                     // Clear button
-                    AnimatedVisibility(
+                    androidx.compose.animation.AnimatedVisibility(
                         visible = query.isNotEmpty(),
                         enter = fadeIn() + scaleIn(),
                         exit = fadeOut() + scaleOut()
@@ -82,7 +82,7 @@ fun SearchBar(
         )
 
         // Result count feedback
-        AnimatedVisibility(
+        androidx.compose.animation.AnimatedVisibility(
             visible = query.isNotBlank() && resultCount >= 0,
             enter = fadeIn(tween(200)) + expandVertically(),
             exit = fadeOut(tween(150)) + shrinkVertically()

@@ -60,9 +60,13 @@ import androidx.navigation.compose.rememberNavController
 import com.example.speak2do.VoiceRecordViewModel
 import com.example.speak2do.components.MainScreen
 import com.example.speak2do.components.TasksScreen
+import com.example.speak2do.data.VoiceRecordEntity
 import com.example.speak2do.model.RecordingItem
 import com.example.speak2do.ui.theme.*
 import kotlinx.coroutines.launch
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun AppNavGraph(
@@ -242,7 +246,33 @@ fun AppNavGraph(
                     onToggleCompleted = { id, completed ->
                         viewModel.toggleCompleted(id, completed)
                     },
-                    onDelete = onDeleteWithUndo
+                    onDelete = onDeleteWithUndo,
+                    onAddEvent = { date, title, time, notes ->
+                        val localTime = try {
+                            LocalTime.parse(time)
+                        } catch (_: Exception) {
+                            LocalTime.of(9, 0)
+                        }
+                        val dateTime = date.atTime(localTime)
+                        val timestamp = dateTime
+                            .atZone(ZoneId.systemDefault())
+                            .toInstant()
+                            .toEpochMilli()
+                        val displayTime = dateTime.format(DateTimeFormatter.ofPattern("hh:mm a"))
+                        val fullDateTime = dateTime.format(DateTimeFormatter.ofPattern("dd MMM yyyy | hh:mm a"))
+                        val content = if (notes.isNotBlank()) "$title - $notes" else title
+
+                        viewModel.insertRecord(
+                            VoiceRecordEntity(
+                                text = content,
+                                dateTime = displayTime,
+                                fullDateTime = fullDateTime,
+                                duration = "EVENT",
+                                progress = 1f,
+                                createdAt = timestamp
+                            )
+                        )
+                    }
                 )
             }
             composable(BottomNavItem.Stats.route) {

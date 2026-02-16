@@ -204,7 +204,7 @@ fun ProfileScreen(
                     onClick = { showAbout = !showAbout }
                 )
 
-                AnimatedVisibility(
+                androidx.compose.animation.AnimatedVisibility(
                     visible = showAbout,
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically()

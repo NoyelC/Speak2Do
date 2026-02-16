@@ -17,6 +17,7 @@ import androidx.activity.viewModels
 import androidx.lifecycle.viewModelScope
 import com.example.speak2do.auth.AuthViewModel
 import com.example.speak2do.auth.NameSetupScreen
+import com.example.speak2do.auth.OtpVerificationScreen
 import com.example.speak2do.auth.PhoneLoginScreen
 import com.example.speak2do.data.VoiceRecordEntity
 import com.example.speak2do.navigation.AppNavGraph
@@ -60,12 +61,21 @@ class MainActivity : ComponentActivity() {
                 val hasDisplayName = !currentUser?.displayName.isNullOrBlank()
 
                 if (currentUser == null) {
-                    PhoneLoginScreen(
-                        state = authState,
-                        onSendOtp = { phone -> authViewModel.sendOtp(this@MainActivity, phone) },
-                        onVerifyOtp = { otp -> authViewModel.verifyOtp(otp) },
-                        onClearError = { authViewModel.clearError() }
-                    )
+                    if (authState.isCodeSent) {
+                        OtpVerificationScreen(
+                            state = authState,
+                            onVerifyOtp = { otp -> authViewModel.verifyOtp(otp) },
+                            onResendOtp = { phone -> authViewModel.sendOtp(this@MainActivity, phone) },
+                            onBack = { authViewModel.backToPhoneEntry() },
+                            onClearError = { authViewModel.clearError() }
+                        )
+                    } else {
+                        PhoneLoginScreen(
+                            state = authState,
+                            onSendOtp = { phone -> authViewModel.sendOtp(this@MainActivity, phone) },
+                            onClearError = { authViewModel.clearError() }
+                        )
+                    }
                 } else if (!hasDisplayName) {
                     NameSetupScreen(
                         isLoading = authState.isLoading,
