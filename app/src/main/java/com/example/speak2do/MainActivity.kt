@@ -32,6 +32,7 @@ import com.example.speak2do.network.gemini.GeminiRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -138,7 +139,8 @@ class MainActivity : ComponentActivity() {
 
                 viewModel.setSpokenText(text)
                 if (text.isNotEmpty()) {
-                    mainScreenViewModel.onVoiceResult(text)
+                    val currentDate = LocalDate.now().format(DateTimeFormatter.ISO_DATE)
+                    mainScreenViewModel.onVoiceResult(currentDate, text)
                 }
 
                 if (text.isNotEmpty()) {

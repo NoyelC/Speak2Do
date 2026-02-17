@@ -6,8 +6,6 @@ import com.example.speak2do.network.gemini.GeminiRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 class MainScreenViewModel(private val repository: GeminiRepository) : ViewModel() {
     private val _geminiResponse = MutableStateFlow("")
@@ -24,7 +22,7 @@ class MainScreenViewModel(private val repository: GeminiRepository) : ViewModel(
         _geminiResponse.value = ""
     }
 
-    fun onVoiceResult(transcript: String) {
+    fun onVoiceResult(currentDate: String, transcript: String) {
         if (transcript.isBlank()) {
             _error.value = "Empty voice transcript"
             return
@@ -32,7 +30,6 @@ class MainScreenViewModel(private val repository: GeminiRepository) : ViewModel(
         _isProcessing.value = true
         viewModelScope.launch {
             try {
-                val currentDate = LocalDate.now().format(DateTimeFormatter.ISO_DATE)
                 val result = repository.generateTaskJson(currentDate, transcript)
                 _geminiResponse.value = result
             } catch (e: Exception) {
