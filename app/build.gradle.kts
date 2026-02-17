@@ -5,6 +5,10 @@ plugins {
     alias(libs.plugins.ksp)
 
     id("com.google.gms.google-services")
+
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.0"
+
+
 }
 
 android {
@@ -59,6 +63,7 @@ dependencies {
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+   // implementation(libs.firebase.database.ktx)
     ksp(libs.androidx.room.compiler)
 
     // ViewModel Compose
@@ -70,6 +75,26 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:34.9.0"))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-auth")
+
+    //Image loading library
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // Ktor core
+    implementation("io.ktor:ktor-client-core:2.3.12")
+
+    // Android engine
+    implementation("io.ktor:ktor-client-android:2.3.12")
+
+    // JSON serialization
+    implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
+
+    // Logging
+    implementation("io.ktor:ktor-client-logging:2.3.12")
+
+    // Kotlin JSON
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.4")
+
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

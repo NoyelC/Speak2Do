@@ -3,6 +3,7 @@ package com.example.speak2do
 import android.Manifest
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
@@ -14,7 +15,10 @@ import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.lifecycleScope
 import com.example.speak2do.auth.AuthViewModel
 import com.example.speak2do.auth.NameSetupScreen
 import com.example.speak2do.auth.OtpVerificationScreen
@@ -23,6 +27,8 @@ import com.example.speak2do.data.VoiceRecordEntity
 import com.example.speak2do.navigation.AppNavGraph
 import com.example.speak2do.ui.theme.Speak2DoTheme
 import com.example.speak2do.util.formatTime
+import com.example.speak2do.network.gemini.Gemini
+import com.example.speak2do.network.gemini.GeminiRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -36,6 +42,16 @@ class MainActivity : ComponentActivity() {
     private var timerJob: Job? = null
     private val viewModel: VoiceRecordViewModel by viewModels()
     private val authViewModel: AuthViewModel by viewModels()
+    private val mainScreenViewModel: MainScreenViewModel by viewModels {
+        val apiKey = "AIzaSyBKdPpt3jOZG_W-BpajTN_TMOTEHsqp0o8"
+        val repo = GeminiRepository(Gemini.create(apiKey))
+        object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return MainScreenViewModel(repo) as T
+            }
+        }
+    }
     private var isListening = false
 
     private val requestPermissionLauncher =
@@ -96,6 +112,22 @@ class MainActivity : ComponentActivity() {
         }
 
         setupSpeechRecognizer()
+        lifecycleScope.launchWhenStarted {
+            mainScreenViewModel.geminiResponse.collect { result ->
+                if (result.isNotBlank()) {
+                    Toast.makeText(this@MainActivity, "Gemini: $result", Toast.LENGTH_LONG).show()
+                    Log.d("Gemini", "Result: $result")
+                }
+            }
+        }
+        lifecycleScope.launchWhenStarted {
+            mainScreenViewModel.error.collect { err ->
+                if (!err.isNullOrBlank()) {
+                    Toast.makeText(this@MainActivity, "Gemini error: $err", Toast.LENGTH_LONG).show()
+                    Log.e("Gemini", "Error: $err")
+                }
+            }
+        }
     }
 
     private fun setupSpeechRecognizer() {
@@ -105,6 +137,9 @@ class MainActivity : ComponentActivity() {
                 val text = matches?.getOrNull(0) ?: ""
 
                 viewModel.setSpokenText(text)
+                if (text.isNotEmpty()) {
+                    mainScreenViewModel.onVoiceResult(text)
+                }
 
                 if (text.isNotEmpty()) {
                     val dateTime = LocalDateTime.now()
@@ -193,6 +228,7 @@ class MainActivity : ComponentActivity() {
         viewModel.setIsRecording(true)
         viewModel.setRecordingTime(0)
         viewModel.setSpokenText("")
+        mainScreenViewModel.onVoiceStart()
         startTimer()
         speechRecognizer.startListening(intent)
     }

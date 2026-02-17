@@ -1,10 +1,12 @@
 package com.example.speak2do.components
 
 import androidx.compose.animation.AnimatedVisibility
+import android.net.Uri
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +47,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -52,13 +56,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.speak2do.R
 import com.example.speak2do.model.RecordingItem
 import com.example.speak2do.ui.theme.*
+import coil.compose.AsyncImage
+
 
 @Composable
 fun ProfileScreen(
     recordings: List<RecordingItem>,
     userName: String = "Noyel",
+    profileImageUri: Uri? = null,
+    onPickImage: () -> Unit = {},
     onSignOut: () -> Unit = {},
     onUpdateName: (String) -> Unit = {}
 ) {
@@ -69,6 +78,7 @@ fun ProfileScreen(
     var showAbout by remember { mutableStateOf(false) }
     var showEditName by remember { mutableStateOf(false) }
     var draftName by remember { mutableStateOf(userName) }
+
 
     LazyColumn(
         modifier = Modifier
@@ -105,20 +115,31 @@ fun ProfileScreen(
                     Box(
                         modifier = Modifier
                             .size(84.dp)
-                            .background(
-                                Brush.linearGradient(listOf(PrimaryCyan, LightCyan)),
-                                CircleShape
-                            )
-                            .semantics { contentDescription = "Profile avatar for $userName" },
+                            .clip(CircleShape)
+                            .clickable{ onPickImage()}
+                            .background(CardBackground)
+                            .clickable { onPickImage() },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = userName.firstOrNull()?.uppercase() ?: "?",
-                            color = WhiteText,
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+
+                        if (profileImageUri != null) {
+
+                            AsyncImage(
+                                model = profileImageUri,
+                                contentDescription = "Profile photo",
+                                modifier = Modifier.fillMaxSize()
+                            )
+
+                        } else {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_profile_avatar),
+                                contentDescription = "Default profile photo",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
+
                     Spacer(Modifier.height(Dimens.SpacingMd))
                     Text(
                         text = userName.ifBlank { "User" },
