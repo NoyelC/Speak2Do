@@ -18,6 +18,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +39,7 @@ fun VoiceAssistantCard(
     isRecording: Boolean,
     recordingTime: Int,
     spokenText: String,
+    voiceLevel: Float,
     onMicClick: () -> Unit,
     onCancelRecording: () -> Unit = {}
 ) {
@@ -109,8 +111,7 @@ fun VoiceAssistantCard(
 
         Spacer(Modifier.height(Dimens.SpacingLg))
 
-        // Waveform - shows static when idle, animated when recording
-        SiriWaveform(isRecording)
+        SiriWaveform(isRecording, voiceLevel)
 
         // Recording timer
         Box(
@@ -404,6 +405,7 @@ fun PulsingMicIcon(isRecording: Boolean) {
 @Composable
 fun SiriWaveform(
     isRecording: Boolean,
+    voiceLevel: Float,
     barCount: Int = 18,
     barWidth: Dp = 6.dp,
     barSpacing: Dp = 4.dp,
@@ -439,21 +441,15 @@ fun SiriWaveform(
         return
     }
 
-    val transition = rememberInfiniteTransition(label = "siriWave")
-
-    val bars = List(barCount) { index ->
-        transition.animateFloat(
-            initialValue = minBarHeight.value,
-            targetValue = maxBarHeight.value,
-            animationSpec = infiniteRepeatable(
-                animation = tween(
-                    durationMillis = 500 + index * 35,
-                    easing = FastOutSlowInEasing
-                ),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "bar$index"
-        )
+    val normalized = (voiceLevel / 10f).coerceIn(0f, 1f)
+    val multipliers = remember {
+        List(barCount) { i ->
+            val phase = (i % 6) + 1
+            0.6f + 0.4f * (phase / 6f)
+        }
+    }
+    val targetHeights = multipliers.map { m ->
+        minBarHeight.value + (maxBarHeight.value - minBarHeight.value) * (normalized * m)
     }
 
     Row(
@@ -463,11 +459,16 @@ fun SiriWaveform(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
-        bars.forEach { height ->
+        targetHeights.forEachIndexed { idx, target ->
+            val height by animateFloatAsState(
+                targetValue = target,
+                animationSpec = tween(120, easing = FastOutSlowInEasing),
+                label = "barAnim$idx"
+            )
             Box(
                 modifier = Modifier
                     .width(barWidth)
-                    .height(height.value.dp)
+                    .height(height.dp)
                     .clip(RoundedCornerShape(50))
                     .background(
                         Brush.verticalGradient(

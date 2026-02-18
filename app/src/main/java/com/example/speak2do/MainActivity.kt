@@ -44,7 +44,7 @@ class MainActivity : ComponentActivity() {
     private val viewModel: VoiceRecordViewModel by viewModels()
     private val authViewModel: AuthViewModel by viewModels()
     private val mainScreenViewModel: MainScreenViewModel by viewModels {
-        val apiKey = "AIzaSyBKdPpt3jOZG_W-BpajTN_TMOTEHsqp0o8"
+        val apiKey = "AIzaSyA88ajuWbQYYuyYD_gXqC40XjwSsMXgSk8"
         val repo = GeminiRepository(Gemini.create(apiKey))
         object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -192,7 +192,9 @@ class MainActivity : ComponentActivity() {
 
             override fun onReadyForSpeech(params: Bundle?) {}
             override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onRmsChanged(rmsdB: Float) {
+                viewModel.setVoiceLevel(rmsdB)
+            }
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onPartialResults(partialResults: Bundle?) {}
             override fun onEvent(eventType: Int, params: Bundle?) {}

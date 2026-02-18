@@ -36,6 +36,7 @@ fun MainScreen(
     recordingTime: Int,
     recordings: List<RecordingItem>,
     isLoading: Boolean,
+    voiceLevel: Float = 0f,
     onMicClick: () -> Unit,
     onCancelRecording: () -> Unit = {},
     onSeeAllClick: () -> Unit = {},
@@ -113,6 +114,7 @@ fun MainScreen(
                     isRecording = isRecording,
                     recordingTime = recordingTime,
                     spokenText = spokenText,
+                    voiceLevel = voiceLevel,
                     onMicClick = onMicClick,
                     onCancelRecording = onCancelRecording
                 )

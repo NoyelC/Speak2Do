@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -53,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.example.speak2do.model.RecordingItem
 import com.example.speak2do.ui.theme.CardBackground
 import com.example.speak2do.ui.theme.DarkBackground
@@ -169,57 +171,6 @@ fun TasksScreen(
 
             Spacer(Modifier.height(Dimens.SpacingLg))
 
-            TasksCalendarCard(
-                visibleMonth = visibleMonth,
-                selectedDate = selectedDate,
-                recordingsByDate = recordingsByDate,
-                onPrevMonth = { visibleMonth = visibleMonth.minusMonths(1) },
-                onNextMonth = { visibleMonth = visibleMonth.plusMonths(1) },
-                onJumpToToday = {
-                    visibleMonth = YearMonth.now()
-                    selectedDate = LocalDate.now()
-                },
-                onDateSelected = { clicked ->
-                    selectedDate = if (selectedDate == clicked) null else clicked
-                }
-            )
-
-            androidx.compose.animation.AnimatedVisibility(visible = selectedDate != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = Dimens.SpacingSm),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "${selectedDate?.format(DateTimeFormatter.ofPattern("dd MMM"))} • $selectedDateCount task(s)",
-                        color = GrayText,
-                        fontSize = 13.sp
-                    )
-                    Text(
-                        text = "Clear date filter",
-                        color = LightCyan,
-                        fontSize = 13.sp,
-                        modifier = Modifier.clickable { selectedDate = null }
-                    )
-                }
-            }
-            androidx.compose.animation.AnimatedVisibility(visible = selectedDate != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = Dimens.SpacingSm),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    Button(onClick = { showAddEventDialog = true }) {
-                        Text("Add Event")
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(Dimens.SpacingLg))
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -268,7 +219,108 @@ fun TasksScreen(
 
             if (isLoading) {
                 ShimmerTaskList(count = 4)
-            } else if (filteredRecordings.isEmpty()) {
+            } else if (filteredRecordings.isNotEmpty()) {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(Dimens.SpacingMd),
+                    contentPadding = PaddingValues(bottom = Dimens.SpacingLg)
+                ) {
+                    itemsIndexed(filteredRecordings, key = { _, item -> item.id }) { index, item ->
+                        AnimatedListItem(index = index) {
+                            SwipeableRecordingCard(
+                                item = item,
+                                onToggleCompleted = onToggleCompleted,
+                                onDelete = onDelete,
+                                searchQuery = searchQuery
+                            )
+                        }
+                    }
+                }
+            }
+
+            TasksCalendarCard(
+                visibleMonth = visibleMonth,
+                selectedDate = selectedDate,
+                recordingsByDate = recordingsByDate,
+                onPrevMonth = { visibleMonth = visibleMonth.minusMonths(1) },
+                onNextMonth = { visibleMonth = visibleMonth.plusMonths(1) },
+                onJumpToToday = {
+                    visibleMonth = YearMonth.now()
+                    selectedDate = LocalDate.now()
+                },
+                onDateSelected = { clicked ->
+                    selectedDate = if (selectedDate == clicked) null else clicked
+                }
+            )
+            
+            val overlapHeight = 84.dp
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset(y = -overlapHeight)
+                        .zIndex(1f)
+                ) {
+                    ShimmerTaskList(count = 4)
+                }
+            } else if (filteredRecordings.isNotEmpty()) {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(Dimens.SpacingMd),
+                    contentPadding = PaddingValues(bottom = Dimens.SpacingLg),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset(y = -overlapHeight)
+                        .zIndex(1f)
+                ) {
+                    itemsIndexed(filteredRecordings, key = { _, item -> item.id }) { index, item ->
+                        AnimatedListItem(index = index) {
+                            SwipeableRecordingCard(
+                                item = item,
+                                onToggleCompleted = onToggleCompleted,
+                                onDelete = onDelete,
+                                searchQuery = searchQuery
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(overlapHeight))
+            AnimatedVisibility(visible = selectedDate != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = Dimens.SpacingSm),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${selectedDate?.format(DateTimeFormatter.ofPattern("dd MMM"))} • $selectedDateCount task(s)",
+                        color = GrayText,
+                        fontSize = 13.sp
+                    )
+                    Text(
+                        text = "Clear date filter",
+                        color = LightCyan,
+                        fontSize = 13.sp,
+                        modifier = Modifier.clickable { selectedDate = null }
+                    )
+                }
+            }
+            AnimatedVisibility(visible = selectedDate != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = Dimens.SpacingSm),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Button(onClick = { showAddEventDialog = true }) {
+                        Text("Add Event")
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(Dimens.SpacingLg))
+
+            if (!isLoading && filteredRecordings.isEmpty()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -306,22 +358,6 @@ fun TasksScreen(
                         fontSize = 13.sp,
                         textAlign = TextAlign.Center
                     )
-                }
-            } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(Dimens.SpacingMd),
-                    contentPadding = PaddingValues(bottom = Dimens.SpacingLg)
-                ) {
-                    itemsIndexed(filteredRecordings, key = { _, item -> item.id }) { index, item ->
-                        AnimatedListItem(index = index) {
-                            SwipeableRecordingCard(
-                                item = item,
-                                onToggleCompleted = onToggleCompleted,
-                                onDelete = onDelete,
-                                searchQuery = searchQuery
-                            )
-                        }
-                    }
                 }
             }
         }

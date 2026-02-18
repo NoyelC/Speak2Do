@@ -85,6 +85,7 @@ fun AppNavGraph(
     val spokenText by viewModel.spokenText.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
     val recordingTime by viewModel.recordingTime.collectAsState()
+    val voiceLevel by viewModel.voiceLevel.collectAsState()
 
     // Show shimmer until first real data arrives from Room
     var hasLoaded by remember { mutableStateOf(false) }
@@ -112,11 +113,13 @@ fun AppNavGraph(
 
     val onDeleteWithUndo: (Long) -> Unit = { id ->
         scope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
             val backup = viewModel.getRecordById(id)
             viewModel.deleteRecord(id)
             val result = snackbarHostState.showSnackbar(
                 message = "Task deleted",
                 actionLabel = "Undo",
+                withDismissAction = true,
                 duration = SnackbarDuration.Short
             )
             if (result == SnackbarResult.ActionPerformed && backup != null) {
@@ -218,6 +221,7 @@ fun AppNavGraph(
                     recordingTime = recordingTime,
                     recordings = recordings,
                     isLoading = isLoading,
+                    voiceLevel = voiceLevel,
                     onMicClick = onMicClick,
                     onCancelRecording = onCancelRecording,
                     userName = userName,

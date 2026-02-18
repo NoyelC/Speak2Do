@@ -33,6 +33,9 @@ class VoiceRecordViewModel(application: Application) : AndroidViewModel(applicat
     private val _recordingTime = MutableStateFlow(0)
     val recordingTime: StateFlow<Int> = _recordingTime.asStateFlow()
 
+    private val _voiceLevel = MutableStateFlow(0f)
+    val voiceLevel: StateFlow<Float> = _voiceLevel.asStateFlow()
+
     fun setSpokenText(text: String) {
         _spokenText.value = text
     }
@@ -47,6 +50,10 @@ class VoiceRecordViewModel(application: Application) : AndroidViewModel(applicat
 
     fun incrementRecordingTime() {
         _recordingTime.value++
+    }
+
+    fun setVoiceLevel(level: Float) {
+        _voiceLevel.value = level.coerceIn(0f, 10f)
     }
 
     fun insertRecord(record: VoiceRecordEntity) {

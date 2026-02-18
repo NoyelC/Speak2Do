@@ -1,5 +1,6 @@
 package com.example.speak2do
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.speak2do.network.gemini.GeminiRepository
@@ -31,7 +32,13 @@ class MainScreenViewModel(private val repository: GeminiRepository) : ViewModel(
         viewModelScope.launch {
             try {
                 val result = repository.generateTaskJson(currentDate, transcript)
-                _geminiResponse.value = result
+                Log.e("GEMINI::", "onVoiceResult:----->${result.getOrNull()} ", )
+                if(result.isSuccess){
+                    _geminiResponse.value = result.getOrNull().toString()
+                }else{
+                    _geminiResponse.value = "failed"
+                }
+
             } catch (e: Exception) {
                 _error.value = e.message
             } finally {
