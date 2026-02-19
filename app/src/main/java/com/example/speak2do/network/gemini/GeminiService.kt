@@ -40,7 +40,7 @@ data class GeminiConfig(
 )
 class GeminiService(
     private val client: HttpClient,
-    private val apiKey: String ="AIzaSyA88ajuWbQYYuyYD_gXqC40XjwSsMXgSk8",
+    private val apiKey: String,
     private val config : GeminiConfig = GeminiConfig()
 ) {
 
@@ -232,6 +232,9 @@ class GeminiService(
         currentDate: String?,
         transcript: String
     ): Result<ExtractedTask> = runCatching {
+        if (apiKey.isBlank()) {
+            throw Exception("Gemini API key is missing. Configure GEMINI_API_KEY in BuildConfig.")
+        }
 
         val requestBody = createTaskExtractionRequest(currentDate, transcript)
 
@@ -343,6 +346,9 @@ Return ONLY valid JSON.
 
         if (!response.status.isSuccess()) {
             val error = response.bodyAsText()
+            if (error.contains("reported as leaked", ignoreCase = true)) {
+                throw Exception("Gemini API key was revoked as leaked. Generate a new key and update GEMINI_API_KEY.")
+            }
             throw Exception("Gemini API error: ${response.status} - $error")
         }
 

@@ -1,13 +1,15 @@
 package com.example.speak2do.components
 
-import androidx.compose.animation.AnimatedVisibility
 import android.net.Uri
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.Image
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,23 +22,29 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.ExitToApp
 import androidx.compose.material.icons.rounded.Language
-import androidx.compose.material.icons.rounded.Logout
-import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,350 +53,558 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.example.speak2do.R
-import com.example.speak2do.model.RecordingItem
-import com.example.speak2do.ui.theme.*
 import coil.compose.AsyncImage
+import com.example.speak2do.model.RecordingItem
+import com.example.speak2do.ui.theme.Dimens
 
+private val ScreenNavy = Color(0xFF050B18)
+private val DeepNavy = Color(0xFF001A3D)
+private val EmeraldTeal = Color(0xFF00C897)
+private val GlassBg = Color(0x1AFFFFFF)
+private val GlassBorder = Color(0x44FFFFFF)
+private val CardNavy = Color(0xFF0B1A34)
+private val LightBackground = Color(0xFFF4F8FF)
+private val LightCard = Color(0xFFE7F0FF)
 
 @Composable
 fun ProfileScreen(
     recordings: List<RecordingItem>,
-    userName: String = "Noyel",
-    profileImageUri: Uri? = null,
-    onPickImage: () -> Unit = {},
-    onSignOut: () -> Unit = {},
-    onUpdateName: (String) -> Unit = {}
+    userName: String,
+    profileImageUri: Uri?,
+    onPickImage: () -> Unit,
+    onRemoveProfileImage: () -> Unit,
+    onSignOut: () -> Unit,
+    onUpdateName: (String) -> Unit,
+    isDarkMode: Boolean,
+    onDarkModeChange: (Boolean) -> Unit
 ) {
-    val total = recordings.size
-    val completed = recordings.count { it.isCompleted }
-    val pending = total - completed
+    var showEditNameDialog by remember { mutableStateOf(false) }
+    var showRemovePhotoDialog by remember { mutableStateOf(false) }
+    var pendingName by remember(userName) { mutableStateOf(userName.ifBlank { "User" }) }
 
-    var showAbout by remember { mutableStateOf(false) }
-    var showEditName by remember { mutableStateOf(false) }
-    var draftName by remember { mutableStateOf(userName) }
+    val screenColor by animateColorAsState(
+        targetValue = if (isDarkMode) ScreenNavy else LightBackground,
+        animationSpec = tween(260),
+        label = "profileScreenColor"
+    )
+    val settingCardColor by animateColorAsState(
+        targetValue = if (isDarkMode) CardNavy else LightCard,
+        animationSpec = tween(260),
+        label = "profileSettingCard"
+    )
+    val primaryText by animateColorAsState(
+        targetValue = if (isDarkMode) Color.White else Color(0xFF0F2744),
+        animationSpec = tween(260),
+        label = "profilePrimaryText"
+    )
+    val secondaryText by animateColorAsState(
+        targetValue = if (isDarkMode) Color(0xA6FFFFFF) else Color(0xFF49617D),
+        animationSpec = tween(260),
+        label = "profileSecondaryText"
+    )
+    val heroStart by animateColorAsState(
+        targetValue = if (isDarkMode) DeepNavy else Color(0xFF1E4D8F),
+        animationSpec = tween(260),
+        label = "heroStart"
+    )
+    val heroEnd by animateColorAsState(
+        targetValue = if (isDarkMode) EmeraldTeal else Color(0xFF4FD6B4),
+        animationSpec = tween(260),
+        label = "heroEnd"
+    )
 
+    val waveShape = GenericShape { size, _ ->
+        moveTo(0f, 0f)
+        lineTo(size.width, 0f)
+        lineTo(size.width, size.height * 0.78f)
+        quadraticBezierTo(
+            size.width * 0.76f,
+            size.height * 1.03f,
+            size.width * 0.48f,
+            size.height * 0.86f
+        )
+        quadraticBezierTo(
+            size.width * 0.2f,
+            size.height * 0.72f,
+            0f,
+            size.height * 0.84f
+        )
+        close()
+    }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBackground),
-        contentPadding = PaddingValues(Dimens.ScreenPadding),
-        verticalArrangement = Arrangement.spacedBy(Dimens.SpacingLg),
-        horizontalAlignment = Alignment.CenterHorizontally
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = screenColor
     ) {
-        item {
-            Text(
-                text = "Profile",
-                fontSize = 24.sp,
-                color = WhiteText,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        item {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(Dimens.CardCornerRadius))
-                        .background(CardBackground)
-                        .padding(horizontal = Dimens.SpacingLg, vertical = Dimens.SpacingXl)
-                        .semantics { contentDescription = "Profile card for $userName" },
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(84.dp)
-                            .clip(CircleShape)
-                            .clickable{ onPickImage()}
-                            .background(CardBackground)
-                            .clickable { onPickImage() },
-                        contentAlignment = Alignment.Center
-                    ) {
-
-                        if (profileImageUri != null) {
-
-                            AsyncImage(
-                                model = profileImageUri,
-                                contentDescription = "Profile photo",
-                                modifier = Modifier.fillMaxSize()
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(340.dp)
+                    .clip(waveShape)
+                    .background(
+                        Brush.linearGradient(
+                            listOf(heroStart, heroEnd)
+                        )
+                    )
+                    .drawWithCache {
+                        onDrawBehind {
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(Color(0x66FFFFFF), Color.Transparent)
+                                ),
+                                radius = size.minDimension * 0.44f,
+                                center = androidx.compose.ui.geometry.Offset(
+                                    x = size.width * 0.86f,
+                                    y = size.height * 0.22f
+                                )
                             )
-
-                        } else {
-                            Image(
-                                painter = painterResource(id = R.drawable.ic_profile_avatar),
-                                contentDescription = "Default profile photo",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(Color(0x6644FFD3), Color.Transparent)
+                                ),
+                                radius = size.minDimension * 0.36f,
+                                center = androidx.compose.ui.geometry.Offset(
+                                    x = size.width * 0.18f,
+                                    y = size.height * 0.12f
+                                )
                             )
                         }
                     }
-
-                    Spacer(Modifier.height(Dimens.SpacingMd))
-                    Text(
-                        text = userName.ifBlank { "User" },
-                        color = WhiteText,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = "Speak2Do User",
-                        color = MutedText,
-                        fontSize = 14.sp
-                    )
-                }
-            }
-        }
-
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(Dimens.SmallCornerRadius + 4.dp))
-                    .background(CardBackground)
-                    .padding(Dimens.SpacingLg)
-                    .semantics { contentDescription = "Task summary: $total total, $completed done, $pending pending" },
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                ProfileStatItem(value = "$total", label = "Total", color = PrimaryCyan)
-                ProfileStatItem(value = "$completed", label = "Done", color = SuccessGreen)
-                ProfileStatItem(value = "$pending", label = "Pending", color = WarningOrange)
-            }
-        }
-
-        item {
-            Text(
-                text = "Settings",
-                fontSize = 18.sp,
-                color = WhiteText,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.fillMaxWidth()
             )
-        }
 
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(Dimens.SmallCornerRadius + 4.dp))
-                    .background(CardBackground)
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = Dimens.ScreenPadding,
+                    end = Dimens.ScreenPadding,
+                    top = 108.dp,
+                    bottom = Dimens.ScreenPadding
+                ),
+                verticalArrangement = Arrangement.spacedBy(Dimens.SpacingLg)
             ) {
-                SettingsItem(
-                    icon = Icons.Rounded.Notifications,
-                    label = "Notifications",
-                    onClick = {}
-                )
-                SettingsItem(
-                    icon = Icons.Rounded.DarkMode,
-                    label = "Appearance",
-                    subtitle = "Dark mode",
-                    onClick = {}
-                )
-                SettingsItem(
-                    icon = Icons.Rounded.Language,
-                    label = "Language",
-                    subtitle = "English",
-                    onClick = {}
-                )
-                SettingsItem(
-                    icon = Icons.Rounded.Edit,
-                    label = "Edit Name",
-                    subtitle = userName.ifBlank { "User" },
-                    onClick = {
-                        draftName = userName
-                        showEditName = true
-                    }
-                )
-                SettingsItem(
-                    icon = Icons.Rounded.Info,
-                    label = "About",
-                    showDivider = false,
-                    onClick = { showAbout = !showAbout }
-                )
+                item {
+                    ProfileHeroCard(
+                        recordings = recordings,
+                        userName = userName,
+                        profileImageUri = profileImageUri,
+                        onPickImage = onPickImage,
+                        onRequestRemoveProfileImage = { showRemovePhotoDialog = true },
+                        isDarkMode = isDarkMode,
+                        primaryText = primaryText,
+                        secondaryText = secondaryText
+                    )
+                }
 
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = showAbout,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(DarkBackground.copy(alpha = 0.5f))
-                            .padding(horizontal = Dimens.SpacingLg, vertical = Dimens.SpacingMd)
-                    ) {
-                        Text(
-                            text = "Speak2Do",
-                            color = WhiteText,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        GlassStatCard(
+                            modifier = Modifier.weight(1f),
+                            title = "Total Tasks",
+                            value = recordings.size.toString(),
+                            isDarkMode = isDarkMode,
+                            primaryText = primaryText,
+                            secondaryText = secondaryText
                         )
-                        Spacer(Modifier.height(Dimens.SpacingXs))
-                        Text(
-                            text = "Version 1.0.0",
-                            color = MutedText,
-                            fontSize = 13.sp
-                        )
-                        Text(
-                            text = "Voice-powered task manager",
-                            color = MutedText,
-                            fontSize = 13.sp
+                        GlassStatCard(
+                            modifier = Modifier.weight(1f),
+                            title = "Completed",
+                            value = recordings.count { it.isCompleted }.toString(),
+                            isDarkMode = isDarkMode,
+                            primaryText = primaryText,
+                            secondaryText = secondaryText
                         )
                     }
                 }
-            }
-        }
 
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(Dimens.SmallCornerRadius + 4.dp))
-                    .background(CardBackground)
-            ) {
-                SettingsItem(
-                    icon = Icons.Rounded.Logout,
-                    label = "Sign Out",
-                    showDivider = false,
-                    onClick = onSignOut
-                )
-            }
-        }
+                item {
+                    SettingContainer(
+                        icon = Icons.Rounded.NotificationsActive,
+                        iconTint = Color(0xFFFFC107),
+                        title = "Notifications",
+                        subtitle = "Enabled",
+                        containerColor = settingCardColor,
+                        primaryText = primaryText,
+                        secondaryText = secondaryText
+                    ) {
+                        Text("On", color = primaryText)
+                    }
+                }
 
-        item {
-            Spacer(Modifier.height(Dimens.SpacingXl))
+                item {
+                    SettingContainer(
+                        icon = Icons.Rounded.DarkMode,
+                        iconTint = Color(0xFFB388FF),
+                        title = "Theme",
+                        subtitle = "Light / Dark",
+                        containerColor = settingCardColor,
+                        primaryText = primaryText,
+                        secondaryText = secondaryText
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AnimatedContent(
+                                targetState = isDarkMode,
+                                transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
+                                label = "themeLabel"
+                            ) { dark ->
+                                Text(
+                                    text = if (dark) "Dark" else "Light",
+                                    color = primaryText
+                                )
+                            }
+                            Spacer(modifier = Modifier.size(8.dp))
+                            Switch(
+                                checked = isDarkMode,
+                                onCheckedChange = onDarkModeChange
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    SettingContainer(
+                        icon = Icons.Rounded.Language,
+                        iconTint = Color(0xFF42A5F5),
+                        title = "Language",
+                        subtitle = "Voice and UI",
+                        containerColor = settingCardColor,
+                        primaryText = primaryText,
+                        secondaryText = secondaryText
+                    ) {
+                        Text("English", color = primaryText)
+                    }
+                }
+
+                item {
+                    SettingContainer(
+                        icon = Icons.Rounded.Person,
+                        iconTint = Color(0xFF80CBC4),
+                        title = "Display Name",
+                        subtitle = userName.ifBlank { "User" },
+                        containerColor = settingCardColor,
+                        primaryText = primaryText,
+                        secondaryText = secondaryText
+                    ) {
+                        Button(
+                            onClick = {
+                                pendingName = userName.ifBlank { "User" }
+                                showEditNameDialog = true
+                            }
+                        ) {
+                            Text("Edit")
+                        }
+                    }
+                }
+
+                item {
+                    Button(
+                        onClick = onSignOut,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isDarkMode) Color(0xFF1C2E4F) else Color(0xFF355D9A),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(Icons.Rounded.ExitToApp, contentDescription = null)
+                        Text(text = "Sign Out", modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            }
         }
     }
 
-    if (showEditName) {
-        AlertDialog(
-            onDismissRequest = { showEditName = false },
-            title = { Text("Edit Profile Name", color = WhiteText) },
+    if (showEditNameDialog) {
+        val trimmedName = pendingName.trim()
+        val isValidName = trimmedName.length >= 2
+
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showEditNameDialog = false },
+            title = {
+                Text("Edit Display Name", color = if (isDarkMode) Color.White else Color(0xFF0F2744))
+            },
             text = {
                 OutlinedTextField(
-                    value = draftName,
-                    onValueChange = { draftName = it },
+                    value = pendingName,
+                    onValueChange = { pendingName = it },
                     singleLine = true,
-                    label = { Text("Name") }
+                    label = { Text("Display name") }
                 )
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val trimmed = draftName.trim()
-                        if (trimmed.isNotEmpty()) {
-                            onUpdateName(trimmed)
-                            showEditName = false
-                        }
-                    }
-                ) { Text("Save", color = PrimaryCyan) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEditName = false }) {
-                    Text("Cancel", color = MutedText)
+                        onUpdateName(trimmedName)
+                        showEditNameDialog = false
+                    },
+                    enabled = isValidName
+                ) {
+                    Text("Save")
                 }
             },
-            containerColor = CardBackground
+            dismissButton = {
+                TextButton(onClick = { showEditNameDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = if (isDarkMode) CardNavy else LightCard
         )
     }
-}
 
-@Composable
-fun ProfileStatItem(
-    value: String,
-    label: String,
-    color: androidx.compose.ui.graphics.Color = PrimaryCyan
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.semantics { contentDescription = "$label: $value" }
-    ) {
-        Text(
-            text = value,
-            color = color,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = label,
-            color = MutedText,
-            fontSize = 13.sp
-        )
-    }
-}
-
-@Composable
-fun SettingsItem(
-    icon: ImageVector,
-    label: String,
-    subtitle: String? = null,
-    showDivider: Boolean = true,
-    onClick: () -> Unit = {}
-) {
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onClick() }
-                .padding(horizontal = Dimens.SpacingLg, vertical = 14.dp)
-                .semantics { contentDescription = "$label setting${if (subtitle != null) ": $subtitle" else ""}" },
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = MutedText,
-                modifier = Modifier.size(Dimens.IconSizeMd)
-            )
-            Spacer(Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
+    if (showRemovePhotoDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showRemovePhotoDialog = false },
+            title = {
                 Text(
-                    text = label,
-                    color = WhiteText,
-                    fontSize = 15.sp
+                    "Remove Profile Photo",
+                    color = if (isDarkMode) Color.White else Color(0xFF0F2744)
                 )
-                if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        color = MutedText,
-                        fontSize = 12.sp
+            },
+            text = {
+                Text(
+                    "Are you sure you want to remove your profile photo?",
+                    color = if (isDarkMode) Color(0xA6FFFFFF) else Color(0xFF49617D)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onRemoveProfileImage()
+                        showRemovePhotoDialog = false
+                    }
+                ) {
+                    Text("Remove")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemovePhotoDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = if (isDarkMode) CardNavy else LightCard
+        )
+    }
+}
+
+@Composable
+private fun ProfileHeroCard(
+    recordings: List<RecordingItem>,
+    userName: String,
+    profileImageUri: Uri?,
+    onPickImage: () -> Unit,
+    onRequestRemoveProfileImage: () -> Unit,
+    isDarkMode: Boolean,
+    primaryText: Color,
+    secondaryText: Color
+) {
+    val completedCount = recordings.count { it.isCompleted }
+    val pendingCount = recordings.size - completedCount
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(if (isDarkMode) GlassBg else Color(0xAAFFFFFF))
+            .border(
+                BorderStroke(1.dp, if (isDarkMode) GlassBorder else Color(0x668DB7FF)),
+                RoundedCornerShape(24.dp)
+            )
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(96.dp)
+                .clip(CircleShape)
+                .background(Color(0x22FFFFFF))
+                .clickable(onClick = onPickImage),
+            contentAlignment = Alignment.Center
+        ) {
+            if (profileImageUri != null) {
+                AsyncImage(
+                    model = profileImageUri,
+                    contentDescription = "Profile image",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Rounded.Person,
+                    contentDescription = null,
+                    tint = primaryText,
+                    modifier = Modifier.size(42.dp)
+                )
+            }
+
+            IconButton(
+                onClick = onPickImage,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(if (isDarkMode) Color(0xCC0B1A34) else Color(0xCCE8F2FF))
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Edit,
+                    contentDescription = "Change profile photo",
+                    tint = primaryText,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            if (profileImageUri != null) {
+                IconButton(
+                    onClick = onRequestRemoveProfileImage,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(if (isDarkMode) Color(0xCC2B1020) else Color(0xFFFFE7EE))
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Delete,
+                        contentDescription = "Remove profile photo",
+                        tint = if (isDarkMode) Color(0xFFFF9AB4) else Color(0xFFC63A63),
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
-            Icon(
-                Icons.Rounded.ChevronRight,
-                contentDescription = "Open $label",
-                tint = MutedText,
-                modifier = Modifier.size(20.dp)
-            )
         }
-        if (showDivider) {
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Display Name",
+                color = secondaryText,
+                style = MaterialTheme.typography.labelMedium
+            )
+            Text(
+                text = userName.ifBlank { "User" },
+                style = MaterialTheme.typography.headlineSmall,
+                fontFamily = FontFamily.SansSerif,
+                fontWeight = FontWeight.Bold,
+                color = primaryText
+            )
+            Spacer(modifier = Modifier.size(6.dp))
+            Text(
+                text = "${recordings.size} tasks • $pendingCount pending • $completedCount done",
+                color = secondaryText,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.size(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onPickImage,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Change")
+                }
+                if (profileImageUri != null) {
+                    OutlinedButton(
+                        onClick = onRequestRemoveProfileImage,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Remove")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GlassStatCard(
+    modifier: Modifier = Modifier,
+    title: String,
+    value: String,
+    isDarkMode: Boolean,
+    primaryText: Color,
+    secondaryText: Color
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (isDarkMode) GlassBg else Color(0xAAFFFFFF))
+            .border(
+                BorderStroke(1.dp, if (isDarkMode) GlassBorder else Color(0x668DB7FF)),
+                RoundedCornerShape(18.dp)
+            )
+            .padding(14.dp)
+    ) {
+        Text(
+            text = title,
+            color = secondaryText,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Spacer(modifier = Modifier.size(6.dp))
+        Text(
+            text = value,
+            color = primaryText,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun SettingContainer(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconTint: Color,
+    title: String,
+    subtitle: String,
+    containerColor: Color,
+    primaryText: Color,
+    secondaryText: Color,
+    trailing: @Composable () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(containerColor)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Dimens.SpacingLg)
-                    .height(0.5.dp)
-                    .background(MutedText.copy(alpha = 0.2f))
-            )
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(iconTint.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = iconTint)
+            }
+            Column {
+                Text(
+                    text = title,
+                    color = primaryText,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = subtitle,
+                    color = secondaryText,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
+        trailing()
     }
 }

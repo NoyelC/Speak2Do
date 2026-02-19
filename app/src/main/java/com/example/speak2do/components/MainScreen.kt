@@ -1,12 +1,16 @@
 package com.example.speak2do.components
 
+import android.net.Uri
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Mic
@@ -18,6 +22,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -27,6 +33,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.speak2do.model.RecordingItem
 import com.example.speak2do.ui.theme.*
+
+private val MainBg = Color(0xFF0A1020)
+private val MainHeroStart = Color(0xFF113B6F)
+private val MainHeroEnd = Color(0xFF24A6B9)
+private val MainGlass = Color(0x1FFFFFFF)
+private val MainGlassBorder = Color(0x4DFFFFFF)
+private val MainCard = Color(0xFF151E34)
+private val MainPrimaryText = Color(0xFFFFFFFF)
+private val MainSecondaryText = Color(0xFFB6C5E5)
+private val MainAccent = Color(0xFF67D7FF)
+private val MainPending = Color(0xFF8E7CFF)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,7 +60,9 @@ fun MainScreen(
     onAvatarClick: () -> Unit = {},
     onToggleCompleted: (Long, Boolean) -> Unit = { _, _ -> },
     onDelete: (Long) -> Unit = {},
-    userName: String = "User"
+    userName: String = "User",
+    profileImageUri: Uri? = null,
+    isDarkMode: Boolean = true
 ) {
     var searchQuery by remember { mutableStateOf("") }
 
@@ -82,23 +101,81 @@ fun MainScreen(
         }
     }
 
+    val bgColor = if (isDarkMode) MainBg else Color(0xFFF4F8FF)
+    val heroStart = if (isDarkMode) MainHeroStart else Color(0xFF2F5E96)
+    val heroEnd = if (isDarkMode) MainHeroEnd else Color(0xFF6CB8E9)
+    val glassColor = if (isDarkMode) MainGlass else Color(0xCCFFFFFF)
+    val glassBorderColor = if (isDarkMode) MainGlassBorder else Color(0x668DB7FF)
+    val cardColor = if (isDarkMode) MainCard else Color(0xFFEAF1FF)
+    val primaryTextColor = if (isDarkMode) MainPrimaryText else Color(0xFF0F2744)
+    val secondaryTextColor = if (isDarkMode) MainSecondaryText else Color(0xFF5C7391)
+    val accentColor = if (isDarkMode) MainAccent else Color(0xFF2E77D0)
+    val pendingColor = if (isDarkMode) MainPending else Color(0xFF6E63D9)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .background(bgColor)
             .pullToRefresh(
                 isRefreshing = isRefreshing,
                 state = pullToRefreshState,
                 onRefresh = { isRefreshing = true }
             )
     ) {
+        val heroShape = GenericShape { size, _ ->
+            moveTo(0f, 0f)
+            lineTo(size.width, 0f)
+            lineTo(size.width, size.height * 0.84f)
+            quadraticBezierTo(size.width * 0.75f, size.height, size.width * 0.48f, size.height * 0.88f)
+            quadraticBezierTo(size.width * 0.2f, size.height * 0.76f, 0f, size.height * 0.9f)
+            close()
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(310.dp)
+                .clip(heroShape)
+                .background(Brush.linearGradient(listOf(heroStart, heroEnd)))
+                .drawWithCache {
+                    onDrawBehind {
+                        drawCircle(
+                            brush = Brush.radialGradient(listOf(Color(0x66FFFFFF), Color.Transparent)),
+                            radius = size.minDimension * 0.46f,
+                            center = androidx.compose.ui.geometry.Offset(size.width * 0.85f, size.height * 0.18f)
+                        )
+                        drawCircle(
+                            brush = Brush.radialGradient(listOf(Color(0x6657E8FF), Color.Transparent)),
+                            radius = size.minDimension * 0.32f,
+                            center = androidx.compose.ui.geometry.Offset(size.width * 0.18f, size.height * 0.14f)
+                        )
+                    }
+                }
+        )
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(Dimens.ScreenPadding),
+            contentPadding = PaddingValues(start = Dimens.ScreenPadding, end = Dimens.ScreenPadding, top = 26.dp, bottom = Dimens.ScreenPadding),
             verticalArrangement = Arrangement.spacedBy(Dimens.SpacingLg)
         ) {
             item {
-                HeaderSection(userName = userName, onAvatarClick = onAvatarClick)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(glassColor)
+                        .border(BorderStroke(1.dp, glassBorderColor), RoundedCornerShape(24.dp))
+                        .padding(14.dp)
+                ) {
+                    HeaderSection(
+                        userName = userName,
+                        profileImageUri = profileImageUri,
+                        greetingColor = if (isDarkMode) Color(0xFFEAF3FF) else Color(0xFF183A62),
+                        nameColor = if (isDarkMode) Color.White else Color(0xFF0F2744),
+                        dateColor = if (isDarkMode) Color(0xCCFFFFFF) else Color(0xFF4D6790),
+                        onAvatarClick = onAvatarClick
+                    )
+                }
             }
 
             item {
@@ -115,6 +192,7 @@ fun MainScreen(
                     recordingTime = recordingTime,
                     spokenText = spokenText,
                     voiceLevel = voiceLevel,
+                    isDarkMode = isDarkMode,
                     onMicClick = onMicClick,
                     onCancelRecording = onCancelRecording
                 )
@@ -132,19 +210,22 @@ fun MainScreen(
                         modifier = Modifier.weight(1f),
                         value = "$animatedTotal",
                         label = "Total",
-                        color = PrimaryCyan
+                        color = accentColor,
+                        isDarkMode = isDarkMode
                     )
                     QuickStatChip(
                         modifier = Modifier.weight(1f),
                         value = "$animatedCompleted",
                         label = "Done",
-                        color = SuccessGreen
+                        color = SuccessGreen,
+                        isDarkMode = isDarkMode
                     )
                     QuickStatChip(
                         modifier = Modifier.weight(1f),
                         value = "$animatedPending",
                         label = "Pending",
-                        color = WarningOrange
+                        color = pendingColor,
+                        isDarkMode = isDarkMode
                     )
                 }
             }
@@ -157,16 +238,17 @@ fun MainScreen(
                 ) {
                     Text(
                         "My Tasks",
-                        color = WhiteText,
+                        color = primaryTextColor,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         "See all",
-                        color = PrimaryCyan,
+                        color = accentColor,
                         fontSize = 14.sp,
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
+                            .background(glassColor)
                             .clickable { onSeeAllClick() }
                             .padding(Dimens.SpacingXs)
                             .semantics { contentDescription = "See all tasks" }
@@ -189,20 +271,20 @@ fun MainScreen(
                         Icon(
                             Icons.Rounded.Mic,
                             contentDescription = "No tasks icon",
-                            tint = MutedText.copy(alpha = 0.4f),
+                            tint = secondaryTextColor.copy(alpha = 0.5f),
                             modifier = Modifier.size(Dimens.MinTouchTarget)
                         )
                         Spacer(Modifier.height(Dimens.SpacingMd))
                         Text(
                             text = if (searchQuery.isNotBlank()) "No matching tasks" else "No tasks yet",
-                            color = MutedText,
+                            color = secondaryTextColor,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium
                         )
                         Text(
                             text = if (searchQuery.isNotBlank()) "Try a different search term"
                             else "Tap the mic to create your first task",
-                            color = MutedText.copy(alpha = 0.7f),
+                            color = secondaryTextColor.copy(alpha = 0.8f),
                             fontSize = 13.sp,
                             textAlign = TextAlign.Center
                         )
@@ -215,7 +297,9 @@ fun MainScreen(
                             item = item,
                             onToggleCompleted = onToggleCompleted,
                             onDelete = onDelete,
-                            searchQuery = searchQuery
+                            searchQuery = searchQuery,
+                            useTasksStyle = true,
+                            isDarkMode = isDarkMode
                         )
                     }
                 }
@@ -230,7 +314,7 @@ fun MainScreen(
             state = pullToRefreshState,
             isRefreshing = isRefreshing,
             modifier = Modifier.align(Alignment.TopCenter),
-            color = PrimaryCyan
+            color = accentColor
         )
     }
 }
@@ -240,12 +324,18 @@ fun QuickStatChip(
     modifier: Modifier = Modifier,
     value: String,
     label: String,
-    color: Color
+    color: Color,
+    isDarkMode: Boolean = true
 ) {
+    val chipBg = if (isDarkMode) MainCard else Color(0xFFEAF1FF)
+    val chipBorder = if (isDarkMode) Color(0x26FFFFFF) else Color(0x338DB7FF)
+    val chipLabel = if (isDarkMode) MainSecondaryText else Color(0xFF5C7391)
+
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(Dimens.PillCornerRadius))
-            .background(CardBackground)
+            .background(chipBg)
+            .border(BorderStroke(1.dp, chipBorder), RoundedCornerShape(Dimens.PillCornerRadius))
             .padding(Dimens.SpacingMd)
             .semantics { contentDescription = "$label: $value" },
         horizontalAlignment = Alignment.CenterHorizontally
@@ -258,7 +348,7 @@ fun QuickStatChip(
         )
         Text(
             text = label,
-            color = MutedText,
+            color = chipLabel,
             fontSize = 12.sp
         )
     }

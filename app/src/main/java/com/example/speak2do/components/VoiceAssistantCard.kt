@@ -1,11 +1,35 @@
 package com.example.speak2do.components
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -22,7 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
@@ -31,59 +55,77 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.speak2do.ui.theme.*
+import com.example.speak2do.ui.theme.Dimens
+import com.example.speak2do.ui.theme.ErrorRed
+import com.example.speak2do.ui.theme.WhiteText
 import com.example.speak2do.util.formatTime
 
+private val VoiceDarkStart = Color(0xFF1F2A44)
+private val VoiceDarkEnd = Color(0xFF2C3A5A)
+private val VoiceDarkAccent = Color(0xFF2F8F9D)
+private val VoiceLightStart = Color(0xFFE8F2FF)
+private val VoiceLightEnd = Color(0xFFD5E7FF)
+private val VoiceLightAccent = Color(0xFF4C7AC2)
+
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun VoiceAssistantCard(
     isRecording: Boolean,
     recordingTime: Int,
     spokenText: String,
     voiceLevel: Float,
+    isDarkMode: Boolean = true,
     onMicClick: () -> Unit,
     onCancelRecording: () -> Unit = {}
 ) {
+    val cardStart = if (isDarkMode) VoiceDarkStart else VoiceLightStart
+    val cardEnd = if (isDarkMode) VoiceDarkEnd else VoiceLightEnd
+    val accent = if (isDarkMode) VoiceDarkAccent else VoiceLightAccent
+    val titleColor = if (isDarkMode) WhiteText else Color(0xFF183A62)
+    val subtitleColor = if (isDarkMode) WhiteText.copy(alpha = 0.72f) else Color(0xFF4D6790)
+    val onCardButtonBg = if (isDarkMode) WhiteText.copy(alpha = 0.2f) else Color(0x1A183A62)
+    val controlBg = if (isDarkMode) WhiteText.copy(alpha = 0.15f) else Color(0x1A183A62)
+    val controlBorderA = if (isDarkMode) WhiteText.copy(alpha = 0.4f) else Color(0x4D4C7AC2)
+    val controlBorderB = if (isDarkMode) WhiteText.copy(alpha = 0.1f) else Color(0x1A4C7AC2)
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 340.dp)
+            .widthIn(max = 520.dp)
             .background(
-                Brush.linearGradient(listOf(LightCyan, PrimaryCyan)),
+                Brush.linearGradient(listOf(cardStart, cardEnd)),
                 RoundedCornerShape(Dimens.CardCornerRadius + 8.dp)
             )
-            .padding(Dimens.SpacingXl)
+            .padding(horizontal = Dimens.SpacingLg, vertical = Dimens.SpacingLg)
             .semantics { contentDescription = "Voice assistant card" },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                PulsingMicIcon(isRecording = isRecording)
-
+                VoiceOrbIcon(isRecording = isRecording, voiceLevel = voiceLevel, isDarkMode = isDarkMode)
                 Spacer(Modifier.width(Dimens.SpacingLg))
-
                 Column {
                     Text(
                         "How can I help?",
-                        color = WhiteText,
+                        color = titleColor,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = "\"Hey Speak2Do, add a meeting...\"",
-                        color = WhiteText.copy(alpha = 0.7f),
+                        color = subtitleColor,
                         fontSize = 13.sp
                     )
                 }
             }
 
-            // Cancel button during recording
             androidx.compose.animation.AnimatedVisibility(
                 visible = isRecording,
                 enter = fadeIn() + scaleIn(),
@@ -93,16 +135,13 @@ fun VoiceAssistantCard(
                     onClick = onCancelRecording,
                     modifier = Modifier
                         .size(36.dp)
-                        .background(
-                            WhiteText.copy(alpha = 0.2f),
-                            CircleShape
-                        )
+                        .background(onCardButtonBg, CircleShape)
                         .semantics { contentDescription = "Cancel recording" }
                 ) {
                     Icon(
                         Icons.Default.Close,
                         contentDescription = "Cancel",
-                        tint = WhiteText,
+                        tint = titleColor,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -111,15 +150,15 @@ fun VoiceAssistantCard(
 
         Spacer(Modifier.height(Dimens.SpacingLg))
 
-        SiriWaveform(isRecording, voiceLevel)
+        SiriWaveform(isRecording, voiceLevel, isDarkMode = isDarkMode)
 
-        // Recording timer
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(26.dp),
             contentAlignment = Alignment.Center
         ) {
+
             androidx.compose.animation.AnimatedVisibility(
                 visible = isRecording,
                 enter = fadeIn(tween(300)) + expandVertically(),
@@ -132,15 +171,11 @@ fun VoiceAssistantCard(
                     Icon(
                         Icons.Rounded.Timer,
                         contentDescription = "Recording time",
-                        tint = WhiteText,
+                        tint = titleColor,
                         modifier = Modifier.size(Dimens.IconSizeSm)
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = formatTime(recordingTime),
-                        color = WhiteText,
-                        fontSize = 14.sp
-                    )
+                    Text(text = formatTime(recordingTime), color = titleColor, fontSize = 14.sp)
                 }
             }
         }
@@ -156,36 +191,27 @@ fun VoiceAssistantCard(
                 enter = fadeIn(tween(400)) + slideInVertically { it / 2 },
                 exit = fadeOut(tween(200))
             ) {
-                Text(
-                    text = "\"$spokenText\"",
-                    color = WhiteText,
-                    fontSize = 14.sp
-                )
+                Text(text = "\"$spokenText\"", color = titleColor, fontSize = 14.sp)
             }
         }
 
         Spacer(Modifier.height(Dimens.SpacingMd))
 
-        // Action buttons
         if (isRecording) {
-            // When recording: show Stop + Listening side by side
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingSm)
             ) {
-                // Stop button
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(Dimens.ButtonCornerRadius))
-                        .background(WhiteText.copy(alpha = 0.25f))
+                        .background(if (isDarkMode) WhiteText.copy(alpha = 0.25f) else Color(0x1A183A62))
                         .border(
                             width = 1.dp,
                             brush = Brush.linearGradient(
-                                listOf(
-                                    WhiteText.copy(alpha = 0.5f),
-                                    WhiteText.copy(alpha = 0.15f)
-                                )
+                                if (isDarkMode) listOf(WhiteText.copy(alpha = 0.5f), WhiteText.copy(alpha = 0.15f))
+                                else listOf(Color(0x664C7AC2), Color(0x1A4C7AC2))
                             ),
                             shape = RoundedCornerShape(Dimens.ButtonCornerRadius)
                         )
@@ -194,40 +220,22 @@ fun VoiceAssistantCard(
                         .semantics { contentDescription = "Stop recording" },
                     contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Stop,
-                            contentDescription = null,
-                            tint = WhiteText,
-                            modifier = Modifier.size(20.dp)
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Stop, contentDescription = null, tint = titleColor, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "Stop",
-                            color = WhiteText,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Text("Stop", color = titleColor, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
 
-                // Listening indicator
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(Dimens.ButtonCornerRadius))
-                        .background(WhiteText.copy(alpha = 0.1f))
+                        .background(if (isDarkMode) WhiteText.copy(alpha = 0.1f) else Color(0x14183A62))
                         .padding(vertical = 14.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        // Pulsing dot
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         val pulseDot = rememberInfiniteTransition(label = "dot")
                         val dotAlpha by pulseDot.animateFloat(
                             initialValue = 0.4f,
@@ -241,15 +249,12 @@ fun VoiceAssistantCard(
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .background(
-                                    ErrorRed.copy(alpha = dotAlpha),
-                                    CircleShape
-                                )
+                                .background(ErrorRed.copy(alpha = dotAlpha), CircleShape)
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
                             text = "Listening...",
-                            color = WhiteText.copy(alpha = 0.8f),
+                            color = subtitleColor,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -257,20 +262,14 @@ fun VoiceAssistantCard(
                 }
             }
         } else {
-            // When idle: show Tap to Speak button
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(Dimens.ButtonCornerRadius))
-                    .background(WhiteText.copy(alpha = 0.15f))
+                    .background(controlBg)
                     .border(
                         width = 1.dp,
-                        brush = Brush.linearGradient(
-                            listOf(
-                                WhiteText.copy(alpha = 0.4f),
-                                WhiteText.copy(alpha = 0.1f)
-                            )
-                        ),
+                        brush = Brush.linearGradient(listOf(controlBorderA, controlBorderB)),
                         shape = RoundedCornerShape(Dimens.ButtonCornerRadius)
                     )
                     .clickable { onMicClick() }
@@ -278,23 +277,10 @@ fun VoiceAssistantCard(
                     .semantics { contentDescription = "Tap to start recording" },
                 contentAlignment = Alignment.Center
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        Icons.Default.Mic,
-                        contentDescription = null,
-                        tint = WhiteText,
-                        modifier = Modifier.size(20.dp)
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Mic, contentDescription = null, tint = titleColor, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(Dimens.SpacingSm))
-                    Text(
-                        text = "Tap to Speak",
-                        color = WhiteText,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Text("Tap to Speak", color = titleColor, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -302,56 +288,25 @@ fun VoiceAssistantCard(
 }
 
 @Composable
-fun PulsingMicIcon(isRecording: Boolean) {
-    if (!isRecording) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.semantics { contentDescription = "Microphone idle" }
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
-                    .background(PrimaryCyan, RoundedCornerShape(Dimens.ButtonCornerRadius)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.Mic,
-                    contentDescription = "Microphone",
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-        }
-        return
-    }
-
-    val infiniteTransition = rememberInfiniteTransition(label = "micPulse")
-
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 600,
-                easing = FastOutSlowInEasing
-            ),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "glowAlpha"
+fun VoiceOrbIcon(isRecording: Boolean, voiceLevel: Float, isDarkMode: Boolean = true) {
+    val transition = rememberInfiniteTransition(label = "voiceOrb")
+    val ringRotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(animation = tween(6000, easing = LinearEasing)),
+        label = "ringRotation"
     )
 
-    val glowScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.25f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 600,
-                easing = FastOutSlowInEasing
-            ),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "glowScale"
+    val normalized = (voiceLevel / 10f).coerceIn(0f, 1f)
+    val activeGlow by animateFloatAsState(
+        targetValue = if (isRecording) 0.22f + normalized * 0.35f else 0.16f,
+        animationSpec = tween(220),
+        label = "activeGlow"
     )
+    val accent = if (isDarkMode) VoiceDarkAccent else VoiceLightAccent
+    val ringMid = if (isDarkMode) VoiceDarkEnd else Color(0xFFBFD8FF)
+    val orbTop = if (isDarkMode) VoiceDarkEnd else Color(0xFFDCEBFF)
+    val orbBottom = if (isDarkMode) VoiceDarkAccent else VoiceLightAccent
 
     Box(
         contentAlignment = Alignment.Center,
@@ -359,44 +314,39 @@ fun PulsingMicIcon(isRecording: Boolean) {
             contentDescription = if (isRecording) "Microphone active" else "Microphone idle"
         }
     ) {
-        // Outer glow ring
         Box(
             modifier = Modifier
-                .size((60 * glowScale).dp)
+                .size(72.dp)
+                .rotate(ringRotation)
                 .background(
-                    WhiteText.copy(alpha = glowAlpha * 0.3f),
-                    CircleShape
+                    brush = Brush.sweepGradient(
+                        listOf(
+                            WhiteText.copy(alpha = 0.18f),
+                            accent.copy(alpha = activeGlow),
+                            ringMid.copy(alpha = activeGlow),
+                            WhiteText.copy(alpha = 0.18f)
+                        )
+                    ),
+                    shape = CircleShape
                 )
+                .padding(5.dp)
+                .background((if (isDarkMode) VoiceDarkStart else Color(0xFFB5CCF0)).copy(alpha = 0.2f), CircleShape)
         )
 
-        // Inner glow ring
         Box(
             modifier = Modifier
-                .size((60 * ((glowScale - 1f) * 0.5f + 1f)).dp)
+                .size(58.dp)
                 .background(
-                    WhiteText.copy(alpha = glowAlpha * 0.5f),
-                    CircleShape
-                )
-        )
-
-        // Mic icon box
-        Box(
-            modifier = Modifier
-                .size(60.dp)
-                .shadow(
-                    elevation = (8 * glowAlpha).dp,
-                    shape = RoundedCornerShape(Dimens.ButtonCornerRadius),
-                    ambientColor = LightCyan,
-                    spotColor = LightCyan
-                )
-                .background(PrimaryCyan, RoundedCornerShape(Dimens.ButtonCornerRadius)),
+                    Brush.verticalGradient(listOf(orbTop, orbBottom)),
+                    RoundedCornerShape(Dimens.ButtonCornerRadius)
+                ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 Icons.Default.Mic,
                 contentDescription = "Microphone",
                 tint = Color.White,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(30.dp)
             )
         }
     }
@@ -406,12 +356,15 @@ fun PulsingMicIcon(isRecording: Boolean) {
 fun SiriWaveform(
     isRecording: Boolean,
     voiceLevel: Float,
+    isDarkMode: Boolean = true,
     barCount: Int = 18,
     barWidth: Dp = 6.dp,
     barSpacing: Dp = 4.dp,
     maxBarHeight: Dp = 60.dp,
     minBarHeight: Dp = 12.dp
 ) {
+    val waveAccent = if (isDarkMode) VoiceDarkAccent else VoiceLightAccent
+
     if (!isRecording) {
         Row(
             modifier = Modifier
@@ -428,10 +381,7 @@ fun SiriWaveform(
                         .clip(RoundedCornerShape(50))
                         .background(
                             Brush.verticalGradient(
-                                listOf(
-                                    WhiteText.copy(alpha = 0.25f),
-                                    LightCyan.copy(alpha = 0.2f)
-                                )
+                                listOf(WhiteText.copy(alpha = 0.22f), waveAccent.copy(alpha = 0.2f))
                             )
                         )
                 )
@@ -472,10 +422,7 @@ fun SiriWaveform(
                     .clip(RoundedCornerShape(50))
                     .background(
                         Brush.verticalGradient(
-                            listOf(
-                                WhiteText.copy(alpha = 1f),
-                                LightCyan.copy(alpha = 1f)
-                            )
+                            listOf(WhiteText.copy(alpha = 1f), waveAccent.copy(alpha = 1f))
                         )
                     )
             )

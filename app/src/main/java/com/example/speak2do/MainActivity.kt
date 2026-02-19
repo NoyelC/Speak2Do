@@ -7,11 +7,16 @@ import android.widget.Toast
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -25,13 +30,16 @@ import com.example.speak2do.auth.OtpVerificationScreen
 import com.example.speak2do.auth.PhoneLoginScreen
 import com.example.speak2do.data.VoiceRecordEntity
 import com.example.speak2do.navigation.AppNavGraph
+import com.example.speak2do.ui.theme.AppThemeState
 import com.example.speak2do.ui.theme.Speak2DoTheme
 import com.example.speak2do.util.formatTime
 import com.example.speak2do.network.gemini.Gemini
 import com.example.speak2do.network.gemini.GeminiRepository
+import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -41,10 +49,13 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var speechRecognizer: SpeechRecognizer
     private var timerJob: Job? = null
+    private lateinit var appPrefs: android.content.SharedPreferences
+    private var profileImageUri by mutableStateOf<Uri?>(null)
+    private var lastLoadedProfileUserId: String? = null
     private val viewModel: VoiceRecordViewModel by viewModels()
     private val authViewModel: AuthViewModel by viewModels()
     private val mainScreenViewModel: MainScreenViewModel by viewModels {
-        val apiKey = "AIzaSyA88ajuWbQYYuyYD_gXqC40XjwSsMXgSk8"
+        val apiKey = GeminiApiKeyProvider.getGeminiApiKey()
         val repo = GeminiRepository(Gemini.create(apiKey))
         object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -62,9 +73,30 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    private val pickProfileImageLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) {
+                runCatching {
+                    contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                }
+                profileImageUri = uri
+                val uid = authViewModel.authState.value.user?.uid
+                if (!uid.isNullOrBlank()) {
+                    lifecycleScope.launch {
+                        uploadProfileImage(uid, uri)
+                    }
+                }
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        appPrefs = getSharedPreferences("speak2do_prefs", MODE_PRIVATE)
+        AppThemeState.updateDarkMode(appPrefs.getBoolean("dark_mode", true))
 
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
         requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -72,42 +104,84 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            Speak2DoTheme {
-                val authState by authViewModel.authState.collectAsState()
-                val currentUser = authState.user
-                val hasDisplayName = !currentUser?.displayName.isNullOrBlank()
+            Crossfade(
+                targetState = AppThemeState.isDarkMode,
+                animationSpec = tween(durationMillis = 450),
+                label = "themeCrossfade"
+            ) {
+                Speak2DoTheme {
+                    val authState by authViewModel.authState.collectAsState()
+                    val currentUser = authState.user
+                    val hasDisplayName = !currentUser?.displayName.isNullOrBlank()
 
-                if (currentUser == null) {
-                    if (authState.isCodeSent) {
-                        OtpVerificationScreen(
-                            state = authState,
-                            onVerifyOtp = { otp -> authViewModel.verifyOtp(otp) },
-                            onResendOtp = { phone -> authViewModel.sendOtp(this@MainActivity, phone) },
-                            onBack = { authViewModel.backToPhoneEntry() },
+                    if (currentUser == null) {
+                        if (authState.isCodeSent) {
+                            OtpVerificationScreen(
+                                state = authState,
+                                onVerifyOtp = { otp -> authViewModel.verifyOtp(otp) },
+                                onResendOtp = { phone -> authViewModel.sendOtp(this@MainActivity, phone) },
+                                onBack = { authViewModel.backToPhoneEntry() },
+                                onClearError = { authViewModel.clearError() }
+                            )
+                        } else {
+                            PhoneLoginScreen(
+                                state = authState,
+                                onSendOtp = { phone -> authViewModel.sendOtp(this@MainActivity, phone) },
+                                onClearError = { authViewModel.clearError() }
+                            )
+                        }
+                    } else if (!hasDisplayName) {
+                        NameSetupScreen(
+                            isLoading = authState.isLoading,
+                            error = authState.error,
+                            onSaveName = { name -> authViewModel.updateDisplayName(name) },
                             onClearError = { authViewModel.clearError() }
                         )
                     } else {
-                        PhoneLoginScreen(
-                            state = authState,
-                            onSendOtp = { phone -> authViewModel.sendOtp(this@MainActivity, phone) },
-                            onClearError = { authViewModel.clearError() }
+                        AppNavGraph(
+                            onMicClick = { toggleListening() },
+                            onCancelRecording = { cancelListening() },
+                            userName = currentUser?.displayName ?: "User",
+                            onSignOut = { authViewModel.signOut() },
+                            onUpdateName = { name -> authViewModel.updateDisplayName(name) },
+                            isDarkMode = AppThemeState.isDarkMode,
+                            onDarkModeChange = { enabled ->
+                                AppThemeState.updateDarkMode(enabled)
+                                appPrefs.edit().putBoolean("dark_mode", enabled).apply()
+                            },
+                            profileImageUri = profileImageUri,
+                            onPickProfileImage = {
+                                pickProfileImageLauncher.launch(arrayOf("image/*"))
+                            },
+                            onRemoveProfileImage = {
+                                val uid = authViewModel.authState.value.user?.uid
+                                if (!uid.isNullOrBlank()) {
+                                    lifecycleScope.launch { removeProfileImage(uid) }
+                                } else {
+                                    profileImageUri = null
+                                }
+                            }
                         )
                     }
-                } else if (!hasDisplayName) {
-                    NameSetupScreen(
-                        isLoading = authState.isLoading,
-                        error = authState.error,
-                        onSaveName = { name -> authViewModel.updateDisplayName(name) },
-                        onClearError = { authViewModel.clearError() }
-                    )
-                } else {
-                    AppNavGraph(
-                        onMicClick = { toggleListening() },
-                        onCancelRecording = { cancelListening() },
-                        userName = currentUser?.displayName ?: "User",
-                        onSignOut = { authViewModel.signOut() },
-                        onUpdateName = { name -> authViewModel.updateDisplayName(name) }
-                    )
+                }
+            }
+        }
+
+        lifecycleScope.launchWhenStarted {
+            authViewModel.authState.collect { state ->
+                val uid = state.user?.uid
+                if (uid.isNullOrBlank()) {
+                    lastLoadedProfileUserId = null
+                    profileImageUri = null
+                } else if (lastLoadedProfileUserId != uid) {
+                    lastLoadedProfileUserId = uid
+                    val local = appPrefs.getString("profile_image_uri_$uid", null)
+                    profileImageUri = local?.let { Uri.parse(it) }
+                    val remote = fetchRemoteProfileImage(uid)
+                    if (remote != null) {
+                        profileImageUri = remote
+                        appPrefs.edit().putString("profile_image_uri_$uid", remote.toString()).apply()
+                    }
                 }
             }
         }
@@ -140,7 +214,8 @@ class MainActivity : ComponentActivity() {
                 viewModel.setSpokenText(text)
                 if (text.isNotEmpty()) {
                     val currentDate = LocalDate.now().format(DateTimeFormatter.ISO_DATE)
-                    mainScreenViewModel.onVoiceResult(currentDate, text)
+                    val userId = authViewModel.authState.value.user?.uid
+                    mainScreenViewModel.onVoiceResult(currentDate, text, userId)
                 }
 
                 if (text.isNotEmpty()) {
@@ -252,6 +327,38 @@ class MainActivity : ComponentActivity() {
         isListening = false
         viewModel.setIsRecording(false)
         timerJob?.cancel()
+    }
+
+    private suspend fun uploadProfileImage(uid: String, localUri: Uri) {
+        runCatching {
+            val ref = FirebaseStorage.getInstance().reference.child("profile_images/$uid.jpg")
+            contentResolver.openInputStream(localUri)?.use { stream ->
+                ref.putStream(stream).await()
+            } ?: throw IllegalStateException("Unable to read selected image")
+            val remote = ref.downloadUrl.await().toString()
+            profileImageUri = Uri.parse(remote)
+            appPrefs.edit().putString("profile_image_uri_$uid", remote).apply()
+        }.onFailure { throwable ->
+            Log.e("ProfileImage", "Upload failed", throwable)
+            appPrefs.edit().putString("profile_image_uri_$uid", localUri.toString()).apply()
+        }
+    }
+
+    private suspend fun fetchRemoteProfileImage(uid: String): Uri? {
+        return runCatching {
+            val ref = FirebaseStorage.getInstance().reference.child("profile_images/$uid.jpg")
+            Uri.parse(ref.downloadUrl.await().toString())
+        }.getOrNull()
+    }
+
+    private suspend fun removeProfileImage(uid: String) {
+        runCatching {
+            FirebaseStorage.getInstance().reference.child("profile_images/$uid.jpg").delete().await()
+        }.onFailure {
+            Log.w("ProfileImage", "Remote photo delete skipped: ${it.message}")
+        }
+        appPrefs.edit().remove("profile_image_uri_$uid").apply()
+        profileImageUri = null
     }
 
     override fun onDestroy() {

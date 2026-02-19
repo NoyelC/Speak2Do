@@ -1,11 +1,7 @@
 package com.example.speak2do.navigation
 
+import android.net.Uri
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -15,10 +11,12 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
@@ -46,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -74,7 +73,12 @@ fun AppNavGraph(
     onCancelRecording: () -> Unit = {},
     userName: String = "User",
     onSignOut: () -> Unit = {},
-    onUpdateName: (String) -> Unit = {}
+    onUpdateName: (String) -> Unit = {},
+    isDarkMode: Boolean = true,
+    onDarkModeChange: (Boolean) -> Unit = {},
+    profileImageUri: Uri? = null,
+    onPickProfileImage: () -> Unit = {},
+    onRemoveProfileImage: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val viewModel: VoiceRecordViewModel = viewModel()
@@ -130,6 +134,7 @@ fun AppNavGraph(
 
     Scaffold(
         containerColor = DarkBackground,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState) { data ->
                 Snackbar(
@@ -143,56 +148,28 @@ fun AppNavGraph(
         },
         bottomBar = {
             val pendingCount = recordings.count { !it.isCompleted }
-            BottomNavigationBar(navController, pendingCount = pendingCount)
+            BottomNavigationBar(
+                navController = navController,
+                pendingCount = pendingCount,
+                isDarkMode = isDarkMode
+            )
         },
         floatingActionButton = {
             if (currentRoute == BottomNavItem.Home.route) {
-                val pulseTransition = rememberInfiniteTransition(label = "fabPulse")
-                val glowAlpha by pulseTransition.animateFloat(
-                    initialValue = 0.2f,
-                    targetValue = 0.6f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(1200, easing = FastOutSlowInEasing),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "fabGlowAlpha"
-                )
-                val glowSize by pulseTransition.animateFloat(
-                    initialValue = 72f,
-                    targetValue = 84f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(1200, easing = FastOutSlowInEasing),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "fabGlowSize"
-                )
-
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.semantics {
-                        contentDescription = "Record new task"
-                    }
+                FloatingActionButton(
+                    onClick = onMicClick,
+                    containerColor = Color(0xFF7A5AF8),
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier
+                        .size(62.dp)
+                        .semantics { contentDescription = "Record new task" }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(glowSize.dp)
-                            .background(
-                                PrimaryCyan.copy(alpha = glowAlpha * 0.4f),
-                                CircleShape
-                            )
+                    Icon(
+                        Icons.Default.Mic,
+                        contentDescription = "Record voice task",
+                        tint = Color.White,
+                        modifier = Modifier.size(Dimens.IconSizeLg)
                     )
-                    FloatingActionButton(
-                        onClick = onMicClick,
-                        containerColor = PrimaryCyan,
-                        modifier = Modifier.size(64.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Mic,
-                            contentDescription = "Record voice task",
-                            tint = Color.White,
-                            modifier = Modifier.size(Dimens.IconSizeLg)
-                        )
-                    }
                 }
             }
         }
@@ -221,10 +198,12 @@ fun AppNavGraph(
                     recordingTime = recordingTime,
                     recordings = recordings,
                     isLoading = isLoading,
+                    isDarkMode = isDarkMode,
                     voiceLevel = voiceLevel,
                     onMicClick = onMicClick,
                     onCancelRecording = onCancelRecording,
                     userName = userName,
+                    profileImageUri = profileImageUri,
                     onSeeAllClick = {
                         navController.navigate(BottomNavItem.Tasks.route) {
                             popUpTo(navController.graph.startDestinationId)
@@ -247,6 +226,7 @@ fun AppNavGraph(
                 TasksScreen(
                     recordings = recordings,
                     isLoading = isLoading,
+                    isDarkMode = isDarkMode,
                     onToggleCompleted = { id, completed ->
                         viewModel.toggleCompleted(id, completed)
                     },
@@ -280,14 +260,22 @@ fun AppNavGraph(
                 )
             }
             composable(BottomNavItem.Stats.route) {
-                com.example.speak2do.components.StatsScreen(recordings = recordings)
+                com.example.speak2do.components.StatsScreen(
+                    recordings = recordings,
+                    isDarkMode = isDarkMode
+                )
             }
             composable(BottomNavItem.Profile.route) {
                 com.example.speak2do.components.ProfileScreen(
                     recordings = recordings,
                     userName = userName,
+                    profileImageUri = profileImageUri,
+                    onPickImage = onPickProfileImage,
+                    onRemoveProfileImage = onRemoveProfileImage,
                     onSignOut = onSignOut,
-                    onUpdateName = onUpdateName
+                    onUpdateName = onUpdateName,
+                    isDarkMode = isDarkMode,
+                    onDarkModeChange = onDarkModeChange
                 )
             }
         }
@@ -296,7 +284,11 @@ fun AppNavGraph(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BottomNavigationBar(navController: NavController, pendingCount: Int = 0) {
+fun BottomNavigationBar(
+    navController: NavController,
+    pendingCount: Int = 0,
+    isDarkMode: Boolean = true
+) {
 
     val items = listOf(
         BottomNavItem.Home,
@@ -308,68 +300,82 @@ fun BottomNavigationBar(navController: NavController, pendingCount: Int = 0) {
     val currentRoute =
         navController.currentBackStackEntryAsState().value?.destination?.route
 
-    NavigationBar(
-        containerColor = CardBackground
+    val navBg = if (isDarkMode) Color(0x3DFFFFFF) else Color(0xD9FFFFFF)
+    val navBorder = if (isDarkMode) Color(0x59FFFFFF) else Color(0x668DB7FF)
+    val selectedColor = if (isDarkMode) Color(0xFF67D7FF) else Color(0xFF2E77D0)
+    val unselectedColor = if (isDarkMode) Color(0xB3D2DDF5) else Color(0xFF6B7FA0)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(navBg)
+            .border(width = 1.dp, color = navBorder, shape = RoundedCornerShape(24.dp))
     ) {
-        items.forEach { item ->
-            val selected = currentRoute == item.route
-            NavigationBarItem(
-                selected = selected,
-                onClick = {
-                    navController.navigate(item.route) {
-                        popUpTo(navController.graph.startDestinationId)
-                        launchSingleTop = true
-                    }
-                },
-                label = {
-                    Text(
-                        item.label,
-                        color = if (selected) PrimaryCyan else MutedText
-                    )
-                },
-                icon = {
-                    if (item == BottomNavItem.Tasks && pendingCount > 0) {
-                        BadgedBox(
-                            badge = {
-                                Badge(
-                                    containerColor = BadgeRed,
-                                    contentColor = Color.White
-                                ) {
-                                    // Animated badge count
-                                    AnimatedContent(
-                                        targetState = pendingCount,
-                                        transitionSpec = {
-                                            (fadeIn(tween(200)) + scaleIn(tween(200)))
-                                                .togetherWith(fadeOut(tween(150)) + scaleOut(tween(150)))
-                                        },
-                                        label = "badgeCount"
-                                    ) { count ->
-                                        Text(
-                                            "$count",
-                                            fontSize = 10.sp
-                                        )
+        NavigationBar(
+            containerColor = Color.Transparent,
+            tonalElevation = 0.dp
+        ) {
+            items.forEach { item ->
+                val selected = currentRoute == item.route
+                NavigationBarItem(
+                    selected = selected,
+                    onClick = {
+                        navController.navigate(item.route) {
+                            popUpTo(navController.graph.startDestinationId)
+                            launchSingleTop = true
+                        }
+                    },
+                    label = {
+                        Text(
+                            item.label,
+                            color = if (selected) selectedColor else unselectedColor
+                        )
+                    },
+                    icon = {
+                        if (item == BottomNavItem.Tasks && pendingCount > 0) {
+                            BadgedBox(
+                                badge = {
+                                    Badge(
+                                        containerColor = BadgeRed,
+                                        contentColor = Color.White
+                                    ) {
+                                        AnimatedContent(
+                                            targetState = pendingCount,
+                                            transitionSpec = {
+                                                (fadeIn(tween(200)) + scaleIn(tween(200)))
+                                                    .togetherWith(fadeOut(tween(150)) + scaleOut(tween(150)))
+                                            },
+                                            label = "badgeCount"
+                                        ) { count ->
+                                            Text(
+                                                "$count",
+                                                fontSize = 10.sp
+                                            )
+                                        }
                                     }
                                 }
+                            ) {
+                                Icon(
+                                    item.icon,
+                                    contentDescription = "${item.label}, $pendingCount pending",
+                                    tint = if (selected) selectedColor else unselectedColor
+                                )
                             }
-                        ) {
+                        } else {
                             Icon(
                                 item.icon,
-                                contentDescription = "${item.label}, $pendingCount pending",
-                                tint = if (selected) PrimaryCyan else MutedText
+                                contentDescription = item.label,
+                                tint = if (selected) selectedColor else unselectedColor
                             )
                         }
-                    } else {
-                        Icon(
-                            item.icon,
-                            contentDescription = item.label,
-                            tint = if (selected) PrimaryCyan else MutedText
-                        )
-                    }
-                },
-                colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                    indicatorColor = PrimaryCyan.copy(alpha = 0.15f)
+                    },
+                    colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                        indicatorColor = selectedColor.copy(alpha = 0.16f)
+                    )
                 )
-            )
+            }
         }
     }
 }
