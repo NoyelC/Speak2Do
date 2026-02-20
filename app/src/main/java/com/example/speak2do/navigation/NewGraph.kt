@@ -12,7 +12,11 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -22,11 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
@@ -58,11 +59,13 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.speak2do.VoiceRecordViewModel
 import com.example.speak2do.components.MainScreen
+import com.example.speak2do.components.CalendarSyncOption
 import com.example.speak2do.components.TasksScreen
 import com.example.speak2do.data.VoiceRecordEntity
 import com.example.speak2do.model.RecordingItem
 import com.example.speak2do.ui.theme.*
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -78,7 +81,8 @@ fun AppNavGraph(
     onDarkModeChange: (Boolean) -> Unit = {},
     profileImageUri: Uri? = null,
     onPickProfileImage: () -> Unit = {},
-    onRemoveProfileImage: () -> Unit = {}
+    onRemoveProfileImage: () -> Unit = {},
+    onSyncEventToGoogleCalendar: (LocalDate, String, String, String) -> Unit = { _, _, _, _ -> }
 ) {
     val navController = rememberNavController()
     val viewModel: VoiceRecordViewModel = viewModel()
@@ -231,7 +235,7 @@ fun AppNavGraph(
                         viewModel.toggleCompleted(id, completed)
                     },
                     onDelete = onDeleteWithUndo,
-                    onAddEvent = { date, title, time, notes ->
+                    onAddEvent = { date, title, time, notes, syncOption ->
                         val localTime = try {
                             LocalTime.parse(time)
                         } catch (_: Exception) {
@@ -256,6 +260,9 @@ fun AppNavGraph(
                                 createdAt = timestamp
                             )
                         )
+                        if (syncOption == CalendarSyncOption.APP_AND_GOOGLE) {
+                            onSyncEventToGoogleCalendar(date, title, time, notes)
+                        }
                     }
                 )
             }
@@ -282,7 +289,6 @@ fun AppNavGraph(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomNavigationBar(
     navController: NavController,
@@ -312,69 +318,72 @@ fun BottomNavigationBar(
             .clip(RoundedCornerShape(24.dp))
             .background(navBg)
             .border(width = 1.dp, color = navBorder, shape = RoundedCornerShape(24.dp))
+            .padding(horizontal = 8.dp, vertical = 8.dp)
     ) {
-        NavigationBar(
-            containerColor = Color.Transparent,
-            tonalElevation = 0.dp
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             items.forEach { item ->
                 val selected = currentRoute == item.route
-                NavigationBarItem(
-                    selected = selected,
-                    onClick = {
-                        navController.navigate(item.route) {
-                            popUpTo(navController.graph.startDestinationId)
-                            launchSingleTop = true
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable {
+                            navController.navigate(item.route) {
+                                popUpTo(navController.graph.startDestinationId)
+                                launchSingleTop = true
+                            }
                         }
-                    },
-                    label = {
-                        Text(
-                            item.label,
-                            color = if (selected) selectedColor else unselectedColor
-                        )
-                    },
-                    icon = {
-                        if (item == BottomNavItem.Tasks && pendingCount > 0) {
-                            BadgedBox(
-                                badge = {
-                                    Badge(
-                                        containerColor = BadgeRed,
-                                        contentColor = Color.White
-                                    ) {
-                                        AnimatedContent(
-                                            targetState = pendingCount,
-                                            transitionSpec = {
-                                                (fadeIn(tween(200)) + scaleIn(tween(200)))
-                                                    .togetherWith(fadeOut(tween(150)) + scaleOut(tween(150)))
-                                            },
-                                            label = "badgeCount"
-                                        ) { count ->
-                                            Text(
-                                                "$count",
-                                                fontSize = 10.sp
-                                            )
-                                        }
+                        .padding(vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (item == BottomNavItem.Tasks && pendingCount > 0) {
+                        BadgedBox(
+                            badge = {
+                                Badge(
+                                    containerColor = BadgeRed,
+                                    contentColor = Color.White
+                                ) {
+                                    AnimatedContent(
+                                        targetState = pendingCount,
+                                        transitionSpec = {
+                                            (fadeIn(tween(200)) + scaleIn(tween(200)))
+                                                .togetherWith(fadeOut(tween(150)) + scaleOut(tween(150)))
+                                        },
+                                        label = "badgeCount"
+                                    ) { count ->
+                                        Text(
+                                            "$count",
+                                            fontSize = 10.sp
+                                        )
                                     }
                                 }
-                            ) {
-                                Icon(
-                                    item.icon,
-                                    contentDescription = "${item.label}, $pendingCount pending",
-                                    tint = if (selected) selectedColor else unselectedColor
-                                )
                             }
-                        } else {
+                        ) {
                             Icon(
                                 item.icon,
-                                contentDescription = item.label,
-                                tint = if (selected) selectedColor else unselectedColor
+                                contentDescription = "${item.label}, $pendingCount pending",
+                                tint = if (selected) selectedColor else unselectedColor,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                    },
-                    colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-                        indicatorColor = selectedColor.copy(alpha = 0.16f)
+                    } else {
+                        Icon(
+                            item.icon,
+                            contentDescription = item.label,
+                            tint = if (selected) selectedColor else unselectedColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Text(
+                        item.label,
+                        color = if (selected) selectedColor else unselectedColor,
+                        fontSize = 11.sp
                     )
-                )
+                }
             }
         }
     }

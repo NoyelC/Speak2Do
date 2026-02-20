@@ -15,8 +15,12 @@ data class Task(
 class TaskFirestoreRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
-    suspend fun saveTask(task: Task) {
+    suspend fun saveTask(userId: String, task: Task) {
         firestore
+            .collection("speak2do_database")
+            .document("users")
+            .collection("accounts")
+            .document(userId)
             .collection("tasks")
             .add(task)
             .await()

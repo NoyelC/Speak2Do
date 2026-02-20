@@ -28,19 +28,14 @@ import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DarkMode
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ExitToApp
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -85,9 +80,7 @@ fun ProfileScreen(
     isDarkMode: Boolean,
     onDarkModeChange: (Boolean) -> Unit
 ) {
-    var showEditNameDialog by remember { mutableStateOf(false) }
     var showRemovePhotoDialog by remember { mutableStateOf(false) }
-    var pendingName by remember(userName) { mutableStateOf(userName.ifBlank { "User" }) }
 
     val screenColor by animateColorAsState(
         targetValue = if (isDarkMode) ScreenNavy else LightBackground,
@@ -292,14 +285,7 @@ fun ProfileScreen(
                         primaryText = primaryText,
                         secondaryText = secondaryText
                     ) {
-                        Button(
-                            onClick = {
-                                pendingName = userName.ifBlank { "User" }
-                                showEditNameDialog = true
-                            }
-                        ) {
-                            Text("Edit")
-                        }
+                        Text("Profile", color = secondaryText)
                     }
                 }
 
@@ -318,43 +304,6 @@ fun ProfileScreen(
                 }
             }
         }
-    }
-
-    if (showEditNameDialog) {
-        val trimmedName = pendingName.trim()
-        val isValidName = trimmedName.length >= 2
-
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { showEditNameDialog = false },
-            title = {
-                Text("Edit Display Name", color = if (isDarkMode) Color.White else Color(0xFF0F2744))
-            },
-            text = {
-                OutlinedTextField(
-                    value = pendingName,
-                    onValueChange = { pendingName = it },
-                    singleLine = true,
-                    label = { Text("Display name") }
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onUpdateName(trimmedName)
-                        showEditNameDialog = false
-                    },
-                    enabled = isValidName
-                ) {
-                    Text("Save")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEditNameDialog = false }) {
-                    Text("Cancel")
-                }
-            },
-            containerColor = if (isDarkMode) CardNavy else LightCard
-        )
     }
 
     if (showRemovePhotoDialog) {
@@ -445,39 +394,6 @@ private fun ProfileHeroCard(
                 )
             }
 
-            IconButton(
-                onClick = onPickImage,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(if (isDarkMode) Color(0xCC0B1A34) else Color(0xCCE8F2FF))
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Edit,
-                    contentDescription = "Change profile photo",
-                    tint = primaryText,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            if (profileImageUri != null) {
-                IconButton(
-                    onClick = onRequestRemoveProfileImage,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(if (isDarkMode) Color(0xCC2B1020) else Color(0xFFFFE7EE))
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Delete,
-                        contentDescription = "Remove profile photo",
-                        tint = if (isDarkMode) Color(0xFFFF9AB4) else Color(0xFFC63A63),
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
         }
 
         Column(modifier = Modifier.weight(1f)) {
@@ -506,16 +422,24 @@ private fun ProfileHeroCard(
             ) {
                 Button(
                     onClick = onPickImage,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isDarkMode) Color(0xFF206A8A) else Color(0xFF2E77D0),
+                        contentColor = Color.White
+                    )
                 ) {
-                    Text("Change")
+                    Text("Change Photo")
                 }
                 if (profileImageUri != null) {
-                    OutlinedButton(
+                    Button(
                         onClick = onRequestRemoveProfileImage,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isDarkMode) Color(0xFF7A2C3B) else Color(0xFFC4475D),
+                            contentColor = Color.White
+                        )
                     ) {
-                        Text("Remove")
+                        Text("Remove Photo")
                     }
                 }
             }

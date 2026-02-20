@@ -33,6 +33,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
@@ -68,6 +69,11 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+enum class CalendarSyncOption {
+    APP_ONLY,
+    APP_AND_GOOGLE
+}
+
 private val TasksBackground = Color(0xFF081826)
 private val TasksCard = Color(0xFF12263D)
 private val TasksAccent = Color(0xFF2AA7A1)
@@ -86,7 +92,7 @@ fun TasksScreen(
     isLoading: Boolean = false,
     onToggleCompleted: (Long, Boolean) -> Unit,
     onDelete: (Long) -> Unit = {},
-    onAddEvent: (LocalDate, String, String, String) -> Unit = { _, _, _, _ -> },
+    onAddEvent: (LocalDate, String, String, String, CalendarSyncOption) -> Unit = { _, _, _, _, _ -> },
     isDarkMode: Boolean = true
 ) {
     var selectedTab by remember { mutableStateOf(0) }
@@ -96,6 +102,7 @@ fun TasksScreen(
     var eventTitle by remember { mutableStateOf("") }
     var eventTime by remember { mutableStateOf("09:00") }
     var eventNotes by remember { mutableStateOf("") }
+    var syncToGoogleCalendar by remember { mutableStateOf(false) }
 
     val tabs = listOf("All", "Today", "Upcoming")
     val bgColor = if (isDarkMode) TasksBackground else Color(0xFFF4F7FF)
@@ -422,6 +429,29 @@ fun TasksScreen(
                         onValueChange = { eventNotes = it },
                         label = { Text("Notes") }
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Sync to Google Calendar",
+                                color = primaryTextColor,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "Task is always saved in app calendar",
+                                color = mutedTextColor,
+                                fontSize = 11.sp
+                            )
+                        }
+                        Switch(
+                            checked = syncToGoogleCalendar,
+                            onCheckedChange = { syncToGoogleCalendar = it }
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -437,11 +467,17 @@ fun TasksScreen(
                                 selectedDate!!,
                                 eventTitle.trim(),
                                 normalizedTime,
-                                eventNotes.trim()
+                                eventNotes.trim(),
+                                if (syncToGoogleCalendar) {
+                                    CalendarSyncOption.APP_AND_GOOGLE
+                                } else {
+                                    CalendarSyncOption.APP_ONLY
+                                }
                             )
                             eventTitle = ""
                             eventTime = "09:00"
                             eventNotes = ""
+                            syncToGoogleCalendar = false
                             showAddEventDialog = false
                         }
                     }
