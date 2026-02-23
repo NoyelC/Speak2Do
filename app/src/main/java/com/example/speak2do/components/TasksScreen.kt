@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -45,6 +46,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,9 +60,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.speak2do.calendar.CalendarDayEvent
 import com.example.speak2do.model.RecordingItem
 import com.example.speak2do.ui.theme.Dimens
 import com.example.speak2do.ui.theme.SuccessGreen
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -71,7 +75,7 @@ import java.util.Locale
 
 enum class CalendarSyncOption {
     APP_ONLY,
-    APP_AND_GOOGLE
+    APP_AND_DEVICE_CALENDAR
 }
 
 private val TasksBackground = Color(0xFF081826)
@@ -90,9 +94,13 @@ private val TasksCellBg = Color(0xFF1A334F)
 fun TasksScreen(
     recordings: List<RecordingItem>,
     isLoading: Boolean = false,
+    searchQueryOverride: String? = null,
+    onSearchQueryOverrideApplied: () -> Unit = {},
     onToggleCompleted: (Long, Boolean) -> Unit,
     onDelete: (Long) -> Unit = {},
     onAddEvent: (LocalDate, String, String, String, CalendarSyncOption) -> Unit = { _, _, _, _, _ -> },
+    onGetEventsForDay: suspend (LocalDate) -> Result<List<CalendarDayEvent>> = { Result.success(emptyList()) },
+    onAddNoteToCalendarEvent: suspend (Long, String) -> Result<Unit> = { _, _ -> Result.success(Unit) },
     isDarkMode: Boolean = true
 ) {
     var selectedTab by remember { mutableStateOf(0) }
@@ -102,7 +110,16 @@ fun TasksScreen(
     var eventTitle by remember { mutableStateOf("") }
     var eventTime by remember { mutableStateOf("09:00") }
     var eventNotes by remember { mutableStateOf("") }
-    var syncToGoogleCalendar by remember { mutableStateOf(false) }
+    var syncToDeviceCalendar by remember { mutableStateOf(false) }
+    var showDayEventsDialog by remember { mutableStateOf(false) }
+    var dayEvents by remember { mutableStateOf<List<CalendarDayEvent>>(emptyList()) }
+    var dayEventsLoading by remember { mutableStateOf(false) }
+    var dayEventsError by remember { mutableStateOf<String?>(null) }
+    var noteTargetEvent by remember { mutableStateOf<CalendarDayEvent?>(null) }
+    var noteInput by remember { mutableStateOf("") }
+    var savingNote by remember { mutableStateOf(false) }
+    var selectedTaskForDetails by remember { mutableStateOf<RecordingItem?>(null) }
+    val scope = rememberCoroutineScope()
 
     val tabs = listOf("All", "Today", "Upcoming")
     val bgColor = if (isDarkMode) TasksBackground else Color(0xFFF4F7FF)
@@ -128,6 +145,7 @@ fun TasksScreen(
         }
     }
     val selectedDateCount = selectedDate?.let { recordingsByDate[it]?.size ?: 0 } ?: 0
+    val normalizedQuery = searchQuery.trim()
 
     val filteredRecordings = when (selectedTab) {
         1 -> recordings.filter { item ->
@@ -149,8 +167,15 @@ fun TasksScreen(
             }
         } ?: tabFiltered
 
-        if (searchQuery.isBlank()) dateFiltered
-        else dateFiltered.filter { it.text.contains(searchQuery, ignoreCase = true) }
+        if (normalizedQuery.isBlank()) {
+            dateFiltered
+        } else {
+            dateFiltered.filter { item ->
+                item.text.contains(normalizedQuery, ignoreCase = true) ||
+                    item.dateTime.contains(normalizedQuery, ignoreCase = true) ||
+                    item.duration.contains(normalizedQuery, ignoreCase = true)
+            }
+        }
     }
 
     val pullToRefreshState = rememberPullToRefreshState()
@@ -166,6 +191,13 @@ fun TasksScreen(
         if (isRefreshing) {
             kotlinx.coroutines.delay(600)
             isRefreshing = false
+        }
+    }
+
+    LaunchedEffect(searchQueryOverride) {
+        if (!searchQueryOverride.isNullOrBlank()) {
+            searchQuery = searchQueryOverride
+            onSearchQueryOverrideApplied()
         }
     }
 
@@ -214,7 +246,7 @@ fun TasksScreen(
             SearchBar(
                 query = searchQuery,
                 onQueryChange = { searchQuery = it },
-                resultCount = if (searchQuery.isNotBlank()) filteredRecordings.size else -1
+                resultCount = if (normalizedQuery.isNotBlank()) filteredRecordings.size else -1
             )
 
             Spacer(Modifier.height(Dimens.SpacingLg))
@@ -290,7 +322,21 @@ fun TasksScreen(
                         selectedDate = LocalDate.now()
                     },
                     onDateSelected = { clicked ->
-                        selectedDate = if (selectedDate == clicked) null else clicked
+                        selectedDate = clicked
+                        showDayEventsDialog = true
+                        dayEventsLoading = true
+                        dayEventsError = null
+                        dayEvents = emptyList()
+                        scope.launch {
+                            onGetEventsForDay(clicked)
+                                .onSuccess { events ->
+                                    dayEvents = events
+                                }
+                                .onFailure { error ->
+                                    dayEventsError = error.message ?: "Failed to load events"
+                                }
+                            dayEventsLoading = false
+                        }
                     }
                 )
 
@@ -346,9 +392,10 @@ fun TasksScreen(
                                     item = item,
                                     onToggleCompleted = onToggleCompleted,
                                     onDelete = onDelete,
-                                    searchQuery = searchQuery,
+                                    searchQuery = normalizedQuery,
                                     useTasksStyle = true,
-                                    isDarkMode = isDarkMode
+                                    isDarkMode = isDarkMode,
+                                    onCardLongClick = { selectedTaskForDetails = it }
                                 )
                             }
                         }
@@ -369,7 +416,7 @@ fun TasksScreen(
                         Spacer(Modifier.height(Dimens.SpacingMd))
                         Text(
                             text = when {
-                                searchQuery.isNotBlank() -> "No matching tasks"
+                                normalizedQuery.isNotBlank() -> "No matching tasks"
                                 selectedTab == 1 -> "No tasks today"
                                 selectedTab == 2 -> "All caught up!"
                                 selectedDate != null -> "No tasks for selected date"
@@ -381,7 +428,7 @@ fun TasksScreen(
                         )
                         Text(
                             text = when {
-                                searchQuery.isNotBlank() -> "Try a different search term"
+                                normalizedQuery.isNotBlank() -> "Try a different search term"
                                 selectedTab == 1 -> "Tasks created today will appear here"
                                 selectedTab == 2 -> "No pending tasks remaining"
                                 selectedDate != null -> "Tap another date in calendar"
@@ -436,20 +483,20 @@ fun TasksScreen(
                     ) {
                         Column {
                             Text(
-                                text = "Sync to Google Calendar",
+                                text = "Add to phone calendar",
                                 color = primaryTextColor,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
-                                text = "Task is always saved in app calendar",
+                                text = "Task is always saved in app",
                                 color = mutedTextColor,
                                 fontSize = 11.sp
                             )
                         }
                         Switch(
-                            checked = syncToGoogleCalendar,
-                            onCheckedChange = { syncToGoogleCalendar = it }
+                            checked = syncToDeviceCalendar,
+                            onCheckedChange = { syncToDeviceCalendar = it }
                         )
                     }
                 }
@@ -468,8 +515,8 @@ fun TasksScreen(
                                 eventTitle.trim(),
                                 normalizedTime,
                                 eventNotes.trim(),
-                                if (syncToGoogleCalendar) {
-                                    CalendarSyncOption.APP_AND_GOOGLE
+                                if (syncToDeviceCalendar) {
+                                    CalendarSyncOption.APP_AND_DEVICE_CALENDAR
                                 } else {
                                     CalendarSyncOption.APP_ONLY
                                 }
@@ -477,7 +524,7 @@ fun TasksScreen(
                             eventTitle = ""
                             eventTime = "09:00"
                             eventNotes = ""
-                            syncToGoogleCalendar = false
+                            syncToDeviceCalendar = false
                             showAddEventDialog = false
                         }
                     }
@@ -491,6 +538,176 @@ fun TasksScreen(
             containerColor = cardColor
         )
     }
+
+    if (showDayEventsDialog && selectedDate != null) {
+        AlertDialog(
+            onDismissRequest = { showDayEventsDialog = false },
+            title = {
+                Text(
+                    text = "Events on ${selectedDate!!.format(DateTimeFormatter.ofPattern("dd MMM yyyy"))}",
+                    color = primaryTextColor
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    when {
+                        dayEventsLoading -> {
+                            Text("Loading events...", color = secondaryTextColor, fontSize = 13.sp)
+                        }
+                        !dayEventsError.isNullOrBlank() -> {
+                            Text(dayEventsError!!, color = Color(0xFFFFB4AB), fontSize = 13.sp)
+                        }
+                        dayEvents.isEmpty() -> {
+                            Text("No calendar events found for this day", color = secondaryTextColor, fontSize = 13.sp)
+                        }
+                        else -> {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                itemsIndexed(dayEvents, key = { _, event -> event.eventId }) { _, event ->
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(cellBgColor)
+                                            .padding(10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = event.title,
+                                            color = primaryTextColor,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "${formatEventTime(event.startMillis)} - ${formatEventTime(event.endMillis)}",
+                                            color = accentColor,
+                                            fontSize = 12.sp
+                                        )
+                                        if (event.description.isNotBlank()) {
+                                            Text(
+                                                text = event.description,
+                                                color = secondaryTextColor,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                        Text(
+                                            text = "Add Note",
+                                            color = accentColor,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.clickable {
+                                                noteTargetEvent = event
+                                                noteInput = ""
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDayEventsDialog = false }) {
+                    Text("Close", color = accentColor)
+                }
+            },
+            containerColor = cardColor
+        )
+    }
+
+    if (noteTargetEvent != null) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!savingNote) {
+                    noteTargetEvent = null
+                    noteInput = ""
+                }
+            },
+            title = { Text("Add Note", color = primaryTextColor) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = noteTargetEvent?.title.orEmpty(),
+                        color = secondaryTextColor,
+                        fontSize = 12.sp
+                    )
+                    OutlinedTextField(
+                        value = noteInput,
+                        onValueChange = { noteInput = it },
+                        label = { Text("Note") },
+                        enabled = !savingNote
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !savingNote && noteInput.trim().isNotEmpty(),
+                    onClick = {
+                        val event = noteTargetEvent ?: return@TextButton
+                        val note = noteInput.trim()
+                        savingNote = true
+                        scope.launch {
+                            onAddNoteToCalendarEvent(event.eventId, note)
+                                .onSuccess {
+                                    selectedDate?.let { date ->
+                                        onGetEventsForDay(date)
+                                            .onSuccess { events -> dayEvents = events }
+                                            .onFailure { error ->
+                                                dayEventsError = error.message ?: "Failed to refresh events"
+                                            }
+                                    }
+                                    noteTargetEvent = null
+                                    noteInput = ""
+                                }
+                                .onFailure { error ->
+                                    dayEventsError = error.message ?: "Failed to save note"
+                                }
+                            savingNote = false
+                        }
+                    }
+                ) {
+                    Text(if (savingNote) "Saving..." else "Save", color = accentColor)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !savingNote,
+                    onClick = {
+                        noteTargetEvent = null
+                        noteInput = ""
+                    }
+                ) {
+                    Text("Cancel", color = mutedTextColor)
+                }
+            },
+            containerColor = cardColor
+        )
+    }
+
+    if (selectedTaskForDetails != null) {
+        TaskDetailsDialog(
+            item = selectedTaskForDetails!!,
+            onDismiss = { selectedTaskForDetails = null },
+            isDarkMode = isDarkMode,
+            title = "Task Details"
+        )
+    }
+}
+
+private fun formatEventTime(millis: Long): String {
+    val formatter = DateTimeFormatter.ofPattern("hh:mm a")
+    return Instant.ofEpochMilli(millis)
+        .atZone(ZoneId.systemDefault())
+        .toLocalTime()
+        .format(formatter)
 }
 
 @Composable

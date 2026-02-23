@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 interface VoiceRecordDao {
 
     @Insert
-    suspend fun insert(record: VoiceRecordEntity)
+    suspend fun insert(record: VoiceRecordEntity): Long
 
     @Query("SELECT * FROM voice_records ORDER BY createdAt DESC")
     fun getAllRecords(): Flow<List<VoiceRecordEntity>>
@@ -22,4 +22,7 @@ interface VoiceRecordDao {
 
     @Query("DELETE FROM voice_records WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("SELECT * FROM voice_records WHERE duration = 'EVENT' AND isCompleted = 0")
+    suspend fun getActiveEventRecords(): List<VoiceRecordEntity>
 }

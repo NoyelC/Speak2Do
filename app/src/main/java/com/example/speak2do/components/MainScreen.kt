@@ -14,6 +14,9 @@ import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Today
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.pullToRefresh
@@ -33,6 +36,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.speak2do.model.RecordingItem
 import com.example.speak2do.ui.theme.*
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 private val MainBg = Color(0xFF0A1020)
 private val MainHeroStart = Color(0xFF113B6F)
@@ -65,9 +71,33 @@ fun MainScreen(
     isDarkMode: Boolean = true
 ) {
     var searchQuery by remember { mutableStateOf("") }
+    var selectedSnapshotTask by remember { mutableStateOf<RecordingItem?>(null) }
 
-    val filteredRecordings = if (searchQuery.isBlank()) recordings
-    else recordings.filter { it.text.contains(searchQuery, ignoreCase = true) }
+    val today = LocalDate.now()
+    val pendingRecordings = recordings.filter { !it.isCompleted }
+    val baseSections = listOf(
+        "Due Today" to pendingRecordings
+            .filter { item ->
+                Instant.ofEpochMilli(item.createdAt)
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDate() == today
+            }
+            .sortedBy { it.createdAt }
+    )
+
+    val filteredSections = if (searchQuery.isBlank()) {
+        baseSections
+    } else {
+        baseSections.map { (title, items) ->
+            title to items.filter { item ->
+                item.text.contains(searchQuery, ignoreCase = true) ||
+                    item.dateTime.contains(searchQuery, ignoreCase = true) ||
+                    item.duration.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }.filter { it.second.isNotEmpty() }
+
+    val filteredCount = filteredSections.sumOf { it.second.size }
 
     // Animated stat values
     val total = recordings.size
@@ -182,7 +212,7 @@ fun MainScreen(
                 SearchBar(
                     query = searchQuery,
                     onQueryChange = { searchQuery = it },
-                    resultCount = if (searchQuery.isNotBlank()) filteredRecordings.size else -1
+                    resultCount = if (searchQuery.isNotBlank()) filteredCount else -1
                 )
             }
 
@@ -237,7 +267,7 @@ fun MainScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "My Tasks",
+                        "Today Snapshot",
                         color = primaryTextColor,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
@@ -260,7 +290,7 @@ fun MainScreen(
                 item {
                     ShimmerTaskList(count = 3)
                 }
-            } else if (filteredRecordings.isEmpty()) {
+            } else if (filteredSections.isEmpty()) {
                 item {
                     Column(
                         modifier = Modifier
@@ -276,14 +306,14 @@ fun MainScreen(
                         )
                         Spacer(Modifier.height(Dimens.SpacingMd))
                         Text(
-                            text = if (searchQuery.isNotBlank()) "No matching tasks" else "No tasks yet",
+                            text = if (searchQuery.isNotBlank()) "No matching tasks" else "No snapshot tasks",
                             color = secondaryTextColor,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium
                         )
                         Text(
                             text = if (searchQuery.isNotBlank()) "Try a different search term"
-                            else "Tap the mic to create your first task",
+                            else "You are clear for now. Open My Tasks for the full list.",
                             color = secondaryTextColor.copy(alpha = 0.8f),
                             fontSize = 13.sp,
                             textAlign = TextAlign.Center
@@ -291,16 +321,26 @@ fun MainScreen(
                     }
                 }
             } else {
-                itemsIndexed(filteredRecordings, key = { _, item -> item.id }) { index, item ->
-                    AnimatedListItem(index = index) {
-                        SwipeableRecordingCard(
-                            item = item,
-                            onToggleCompleted = onToggleCompleted,
-                            onDelete = onDelete,
-                            searchQuery = searchQuery,
-                            useTasksStyle = true,
+                filteredSections.forEach { (sectionTitle, sectionItems) ->
+                    item(key = "section-$sectionTitle") {
+                        SnapshotSectionHeader(
+                            title = sectionTitle,
+                            count = sectionItems.size,
                             isDarkMode = isDarkMode
                         )
+                    }
+                    itemsIndexed(sectionItems, key = { _, item -> "$sectionTitle-${item.id}" }) { index, item ->
+                        AnimatedListItem(index = index) {
+                            SwipeableRecordingCard(
+                                item = item,
+                                onToggleCompleted = onToggleCompleted,
+                                onDelete = onDelete,
+                                searchQuery = searchQuery,
+                                useTasksStyle = true,
+                                isDarkMode = isDarkMode,
+                                onCardClick = { selectedSnapshotTask = it }
+                            )
+                        }
                     }
                 }
             }
@@ -315,6 +355,84 @@ fun MainScreen(
             isRefreshing = isRefreshing,
             modifier = Modifier.align(Alignment.TopCenter),
             color = accentColor
+        )
+    }
+
+    if (selectedSnapshotTask != null) {
+        TaskDetailsDialog(
+            item = selectedSnapshotTask!!,
+            onDismiss = { selectedSnapshotTask = null },
+            isDarkMode = isDarkMode,
+            title = "Today Snapshot"
+        )
+    }
+}
+
+@Composable
+private fun SnapshotSectionHeader(
+    title: String,
+    count: Int,
+    isDarkMode: Boolean
+) {
+    val (icon, accent, helperText) = when (title) {
+        "Overdue" -> Triple(
+            Icons.Rounded.WarningAmber,
+            if (isDarkMode) Color(0xFFFF7676) else Color(0xFFC73636),
+            "Needs attention"
+        )
+        "Due Today" -> Triple(
+            Icons.Rounded.Today,
+            if (isDarkMode) Color(0xFF67D7FF) else Color(0xFF2E77D0),
+            "Do these first"
+        )
+        else -> Triple(
+            Icons.Rounded.Schedule,
+            if (isDarkMode) Color(0xFF8E7CFF) else Color(0xFF5F55CE),
+            "Coming up next"
+        )
+    }
+
+    val container = if (isDarkMode) Color(0x261D2A44) else Color(0xFFEFF4FF)
+    val label = if (isDarkMode) MainSecondaryText else Color(0xFF5C7391)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp, bottom = 4.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(container)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = title,
+            tint = accent,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = accent,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = helperText,
+                color = label,
+                fontSize = 11.sp
+            )
+        }
+        Text(
+            text = count.toString(),
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .clip(RoundedCornerShape(999.dp))
+                .background(accent)
+                .padding(horizontal = 8.dp, vertical = 3.dp)
         )
     }
 }

@@ -28,6 +28,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.lifecycleScope
 import com.example.speak2do.calendar.CalendarIntegrationManager
+import com.example.speak2do.calendar.CalendarDayEvent
 import com.example.speak2do.calendar.DeadlineExtractionInput
 import com.example.speak2do.calendar.GeminiDeadlineParser
 import com.example.speak2do.calendar.ParsedDeadline
@@ -38,6 +39,7 @@ import com.example.speak2do.auth.OtpVerificationScreen
 import com.example.speak2do.auth.PhoneLoginScreen
 import com.example.speak2do.data.VoiceRecordEntity
 import com.example.speak2do.navigation.AppNavGraph
+import com.example.speak2do.reminder.DeadlineReminderScheduler
 import com.example.speak2do.ui.theme.AppThemeState
 import com.example.speak2do.ui.theme.Speak2DoTheme
 import com.example.speak2do.util.formatTime
@@ -50,6 +52,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -66,7 +69,7 @@ class MainActivity : ComponentActivity() {
     private val calendarIntegrationManager by lazy { CalendarIntegrationManager(this) }
     private val deadlineParser: VoiceDeadlineParser = GeminiDeadlineParser()
     private var pendingDeadlineInput: DeadlineExtractionInput? = null
-    private var pendingGoogleCalendarDeadline: ParsedDeadline? = null
+    private var pendingDeviceCalendarDeadline: ParsedDeadline? = null
     private var lastCalendarEventSignature: String? = null
     private var profileImageUri by mutableStateOf<Uri?>(null)
     private var lastLoadedProfileUserId: String? = null
@@ -91,6 +94,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { _ -> }
+
     private val pickProfileImageLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri != null) {
@@ -113,6 +119,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        DeadlineReminderScheduler.createNotificationChannel(this)
         appPrefs = getSharedPreferences("speak2do_prefs", MODE_PRIVATE)
         AppThemeState.updateDarkMode(appPrefs.getBoolean("dark_mode", true))
         calendarPermissionLauncher =
@@ -121,14 +128,14 @@ class MainActivity : ComponentActivity() {
                 val writeGranted = result[Manifest.permission.WRITE_CALENDAR] == true
                 val pending = pendingDeadlineInput
                 pendingDeadlineInput = null
-                val pendingGoogle = pendingGoogleCalendarDeadline
-                pendingGoogleCalendarDeadline = null
+                val pendingDevice = pendingDeviceCalendarDeadline
+                pendingDeviceCalendarDeadline = null
                 if (readGranted && writeGranted && pending != null) {
                     createCalendarEventForInput(pending)
-                } else if (readGranted && writeGranted && pendingGoogle != null) {
+                } else if (readGranted && writeGranted && pendingDevice != null) {
                     createCalendarEvent(
-                        deadline = pendingGoogle,
-                        preferGoogleCalendar = true
+                        deadline = pendingDevice,
+                        preferLocalCalendar = true
                     )
                 } else if (!(readGranted && writeGranted)) {
                     Toast.makeText(
@@ -141,6 +148,7 @@ class MainActivity : ComponentActivity() {
 
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
         requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        maybeRequestNotificationPermission()
 
         enableEdgeToEdge()
 
@@ -202,8 +210,14 @@ class MainActivity : ComponentActivity() {
                                     profileImageUri = null
                                 }
                             },
-                            onSyncEventToGoogleCalendar = { date, title, time, notes ->
-                                syncTaskEventToGoogleCalendar(date, title, time, notes)
+                            onSyncEventToDeviceCalendar = { date, title, time, notes ->
+                                syncTaskEventToDeviceCalendar(date, title, time, notes)
+                            },
+                            onGetDeviceCalendarEventsForDay = { date ->
+                                getDeviceCalendarEventsForDay(date)
+                            },
+                            onAddNoteToDeviceCalendarEvent = { eventId, note ->
+                                addNoteToDeviceCalendarEvent(eventId, note)
                             }
                         )
                     }
@@ -389,47 +403,65 @@ class MainActivity : ComponentActivity() {
     private fun handleCalendarDeadline(input: DeadlineExtractionInput) {
         val signature = "${input.transcript}|${input.extractedTask.task_title}|${input.extractedTask.date_time}"
         if (signature == lastCalendarEventSignature) return
-
-        if (!hasCalendarPermissions()) {
-            pendingDeadlineInput = input
-            calendarPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.READ_CALENDAR,
-                    Manifest.permission.WRITE_CALENDAR
-                )
-            )
-            return
-        }
         createCalendarEventForInput(input)
     }
 
     private fun createCalendarEventForInput(input: DeadlineExtractionInput) {
         val parsedDeadline = deadlineParser.parse(input) ?: return
         val signature = "${input.transcript}|${input.extractedTask.task_title}|${input.extractedTask.date_time}"
-        createCalendarEvent(
-            deadline = parsedDeadline,
-            preferGoogleCalendar = false,
-            onSuccess = { eventId ->
-                lastCalendarEventSignature = signature
-                Toast.makeText(
-                    this@MainActivity,
-                    "Deadline added to Calendar (event #$eventId)",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
+        val eventDateTime = Instant.ofEpochMilli(parsedDeadline.startMillis)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDateTime()
+        val displayTime = eventDateTime.format(DateTimeFormatter.ofPattern("hh:mm a"))
+        val fullDateTime = eventDateTime.format(DateTimeFormatter.ofPattern("dd MMM yyyy | hh:mm a"))
+        val content = if (parsedDeadline.description.isNotBlank()) {
+            "${parsedDeadline.title} - ${parsedDeadline.description}"
+        } else {
+            parsedDeadline.title
+        }
+        viewModel.insertRecord(
+            VoiceRecordEntity(
+                text = content,
+                dateTime = displayTime,
+                fullDateTime = fullDateTime,
+                duration = "EVENT",
+                progress = 1f,
+                createdAt = parsedDeadline.startMillis
+            )
         )
+        lastCalendarEventSignature = signature
+
+        if (hasCalendarPermissions()) {
+            createCalendarEvent(
+                deadline = parsedDeadline,
+                preferLocalCalendar = true,
+                onSuccess = { eventId ->
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Deadline saved in app and calendar (event #$eventId)",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            )
+        } else {
+            Toast.makeText(
+                this@MainActivity,
+                "Deadline saved in app reminders",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
     private fun createCalendarEvent(
         deadline: ParsedDeadline,
-        preferGoogleCalendar: Boolean,
+        preferLocalCalendar: Boolean,
         onSuccess: ((Long) -> Unit)? = null
     ) {
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 calendarIntegrationManager.createDeadlineEvent(
                     deadline = deadline,
-                    preferGoogleCalendar = preferGoogleCalendar
+                    preferLocalCalendar = preferLocalCalendar
                 )
             }
             result.onSuccess { eventId ->
@@ -446,7 +478,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun syncTaskEventToGoogleCalendar(
+    private fun syncTaskEventToDeviceCalendar(
         date: LocalDate,
         title: String,
         time: String,
@@ -472,7 +504,7 @@ class MainActivity : ComponentActivity() {
         )
 
         if (!hasCalendarPermissions()) {
-            pendingGoogleCalendarDeadline = deadline
+            pendingDeviceCalendarDeadline = deadline
             calendarPermissionLauncher.launch(
                 arrayOf(
                     Manifest.permission.READ_CALENDAR,
@@ -484,11 +516,11 @@ class MainActivity : ComponentActivity() {
 
         createCalendarEvent(
             deadline = deadline,
-            preferGoogleCalendar = true,
+            preferLocalCalendar = true,
             onSuccess = { eventId ->
                 Toast.makeText(
                     this,
-                    "Synced to Google Calendar (event #$eventId)",
+                    "Synced to your calendar (event #$eventId)",
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -505,6 +537,27 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.WRITE_CALENDAR
         ) == PackageManager.PERMISSION_GRANTED
         return readGranted && writeGranted && calendarIntegrationManager.hasCalendarPermissions()
+    }
+
+    private suspend fun getDeviceCalendarEventsForDay(
+        date: LocalDate
+    ): Result<List<CalendarDayEvent>> = withContext(Dispatchers.IO) {
+        if (!hasCalendarPermissions()) {
+            Result.failure(IllegalStateException("Calendar permission not granted"))
+        } else {
+            calendarIntegrationManager.getEventsForDay(date)
+        }
+    }
+
+    private suspend fun addNoteToDeviceCalendarEvent(
+        eventId: Long,
+        note: String
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        if (!hasCalendarPermissions()) {
+            Result.failure(IllegalStateException("Calendar permission not granted"))
+        } else {
+            calendarIntegrationManager.addNoteToEvent(eventId, note)
+        }
     }
 
     private suspend fun uploadProfileImage(uid: String, localUri: Uri) {
@@ -542,5 +595,16 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         speechRecognizer.destroy()
+    }
+
+    private fun maybeRequestNotificationPermission() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 }

@@ -4,7 +4,9 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.speak2do.data.AppDatabase
+import com.example.speak2do.data.NotificationHistoryEntity
 import com.example.speak2do.data.VoiceRecordEntity
+import com.example.speak2do.reminder.DeadlineReminderScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -14,7 +16,10 @@ import kotlinx.coroutines.launch
 
 class VoiceRecordViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val dao = AppDatabase.getDatabase(application).voiceRecordDao()
+    private val appContext = application.applicationContext
+    private val db = AppDatabase.getDatabase(application)
+    private val dao = db.voiceRecordDao()
+    private val notificationDao = db.notificationHistoryDao()
 
     val voiceRecords: StateFlow<List<VoiceRecordEntity>> =
         dao.getAllRecords()
@@ -22,6 +27,22 @@ class VoiceRecordViewModel(application: Application) : AndroidViewModel(applicat
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000),
                 initialValue = emptyList()
+            )
+
+    val notificationHistory: StateFlow<List<NotificationHistoryEntity>> =
+        notificationDao.getAll()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList()
+            )
+
+    val unreadNotifications: StateFlow<Int> =
+        notificationDao.getUnreadCount()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = 0
             )
 
     private val _spokenText = MutableStateFlow("")
@@ -35,6 +56,13 @@ class VoiceRecordViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _voiceLevel = MutableStateFlow(0f)
     val voiceLevel: StateFlow<Float> = _voiceLevel.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val eventRecords = dao.getActiveEventRecords()
+            DeadlineReminderScheduler.syncReminders(appContext, eventRecords)
+        }
+    }
 
     fun setSpokenText(text: String) {
         _spokenText.value = text
@@ -58,21 +86,63 @@ class VoiceRecordViewModel(application: Application) : AndroidViewModel(applicat
 
     fun insertRecord(record: VoiceRecordEntity) {
         viewModelScope.launch {
-            dao.insert(record)
+            val newId = dao.insert(record)
+            val saved = record.copy(id = newId)
+            if (isNotifiableEvent(saved)) {
+                DeadlineReminderScheduler.scheduleReminder(appContext, saved)
+            }
         }
     }
 
     fun toggleCompleted(id: Long, currentlyCompleted: Boolean) {
         viewModelScope.launch {
-            dao.updateCompleted(id, !currentlyCompleted)
+            val updatedCompleted = !currentlyCompleted
+            dao.updateCompleted(id, updatedCompleted)
+            val updated = dao.getById(id) ?: return@launch
+            if (updatedCompleted || !isNotifiableEvent(updated)) {
+                DeadlineReminderScheduler.cancelReminder(appContext, id)
+            } else {
+                DeadlineReminderScheduler.scheduleReminder(appContext, updated)
+            }
         }
     }
 
     fun deleteRecord(id: Long) {
         viewModelScope.launch {
             dao.deleteById(id)
+            DeadlineReminderScheduler.cancelReminder(appContext, id)
         }
     }
 
     suspend fun getRecordById(id: Long) = dao.getById(id)
+
+    fun markNotificationRead(notificationId: Long) {
+        viewModelScope.launch {
+            notificationDao.markRead(notificationId)
+        }
+    }
+
+    fun markAllNotificationsRead() {
+        viewModelScope.launch {
+            notificationDao.markAllRead()
+        }
+    }
+
+    fun deleteNotification(notificationId: Long) {
+        viewModelScope.launch {
+            notificationDao.deleteById(notificationId)
+        }
+    }
+
+    fun clearAllNotifications() {
+        viewModelScope.launch {
+            notificationDao.clearAll()
+        }
+    }
+
+    private fun isNotifiableEvent(record: VoiceRecordEntity): Boolean {
+        return record.duration.equals("EVENT", ignoreCase = true) &&
+            !record.isCompleted &&
+            record.createdAt > System.currentTimeMillis()
+    }
 }

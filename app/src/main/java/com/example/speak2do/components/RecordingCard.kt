@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -58,7 +59,8 @@ fun RecordingCard(
     onToggleCompleted: (Long, Boolean) -> Unit,
     searchQuery: String = "",
     useTasksStyle: Boolean = false,
-    isDarkMode: Boolean = true
+    isDarkMode: Boolean = true,
+    modifier: Modifier = Modifier
 ) {
     val checkboxScale by animateFloatAsState(
         targetValue = if (item.isCompleted) 1.15f else 1f,
@@ -98,7 +100,7 @@ fun RecordingCard(
     }
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
             .clip(RoundedCornerShape(Dimens.CardCornerRadius))
@@ -293,7 +295,9 @@ fun SwipeableRecordingCard(
     onDelete: (Long) -> Unit,
     searchQuery: String = "",
     useTasksStyle: Boolean = false,
-    isDarkMode: Boolean = true
+    isDarkMode: Boolean = true,
+    onCardClick: ((RecordingItem) -> Unit)? = null,
+    onCardLongClick: ((RecordingItem) -> Unit)? = null
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         positionalThreshold = { totalDistance -> totalDistance * 0.4f },
@@ -357,12 +361,22 @@ fun SwipeableRecordingCard(
         enableDismissFromStartToEnd = false,
         enableDismissFromEndToStart = true
     ) {
+        val cardModifier = if (onCardClick != null || onCardLongClick != null) {
+            Modifier.combinedClickable(
+                onClick = { onCardClick?.invoke(item) },
+                onLongClick = { onCardLongClick?.invoke(item) }
+            )
+        } else {
+            Modifier
+        }
+
         RecordingCard(
             item = item,
             onToggleCompleted = onToggleCompleted,
             searchQuery = searchQuery,
             useTasksStyle = useTasksStyle,
-            isDarkMode = isDarkMode
+            isDarkMode = isDarkMode,
+            modifier = cardModifier
         )
     }
 }

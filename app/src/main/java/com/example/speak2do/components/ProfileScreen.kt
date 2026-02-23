@@ -78,7 +78,8 @@ fun ProfileScreen(
     onSignOut: () -> Unit,
     onUpdateName: (String) -> Unit,
     isDarkMode: Boolean,
-    onDarkModeChange: (Boolean) -> Unit
+    onDarkModeChange: (Boolean) -> Unit,
+    onOpenNotifications: () -> Unit = {}
 ) {
     var showRemovePhotoDialog by remember { mutableStateOf(false) }
 
@@ -222,12 +223,13 @@ fun ProfileScreen(
                         icon = Icons.Rounded.NotificationsActive,
                         iconTint = Color(0xFFFFC107),
                         title = "Notifications",
-                        subtitle = "Enabled",
+                        subtitle = "View in-app history",
                         containerColor = settingCardColor,
                         primaryText = primaryText,
-                        secondaryText = secondaryText
+                        secondaryText = secondaryText,
+                        onClick = onOpenNotifications
                     ) {
-                        Text("On", color = primaryText)
+                        Text("Open", color = primaryText)
                     }
                 }
 
@@ -490,6 +492,7 @@ private fun SettingContainer(
     containerColor: Color,
     primaryText: Color,
     secondaryText: Color,
+    onClick: (() -> Unit)? = null,
     trailing: @Composable () -> Unit
 ) {
     Row(
@@ -497,6 +500,9 @@ private fun SettingContainer(
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(containerColor)
+            .then(
+                if (onClick != null) Modifier.clickable { onClick() } else Modifier
+            )
             .padding(horizontal = 14.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween

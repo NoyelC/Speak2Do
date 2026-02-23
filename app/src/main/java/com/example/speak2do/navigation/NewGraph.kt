@@ -58,8 +58,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.speak2do.VoiceRecordViewModel
+import com.example.speak2do.calendar.CalendarDayEvent
 import com.example.speak2do.components.MainScreen
 import com.example.speak2do.components.CalendarSyncOption
+import com.example.speak2do.components.NotificationsScreen
 import com.example.speak2do.components.TasksScreen
 import com.example.speak2do.data.VoiceRecordEntity
 import com.example.speak2do.model.RecordingItem
@@ -82,7 +84,9 @@ fun AppNavGraph(
     profileImageUri: Uri? = null,
     onPickProfileImage: () -> Unit = {},
     onRemoveProfileImage: () -> Unit = {},
-    onSyncEventToGoogleCalendar: (LocalDate, String, String, String) -> Unit = { _, _, _, _ -> }
+    onSyncEventToDeviceCalendar: (LocalDate, String, String, String) -> Unit = { _, _, _, _ -> },
+    onGetDeviceCalendarEventsForDay: suspend (LocalDate) -> Result<List<CalendarDayEvent>> = { Result.success(emptyList()) },
+    onAddNoteToDeviceCalendarEvent: suspend (Long, String) -> Result<Unit> = { _, _ -> Result.success(Unit) }
 ) {
     val navController = rememberNavController()
     val viewModel: VoiceRecordViewModel = viewModel()
@@ -94,6 +98,9 @@ fun AppNavGraph(
     val isRecording by viewModel.isRecording.collectAsState()
     val recordingTime by viewModel.recordingTime.collectAsState()
     val voiceLevel by viewModel.voiceLevel.collectAsState()
+    val notificationHistory by viewModel.notificationHistory.collectAsState()
+    val unreadNotifications by viewModel.unreadNotifications.collectAsState()
+    var taskSearchOverride by remember { mutableStateOf<String?>(null) }
 
     // Show shimmer until first real data arrives from Room
     var hasLoaded by remember { mutableStateOf(false) }
@@ -136,16 +143,21 @@ fun AppNavGraph(
         }
     }
 
+    val scaffoldBg = if (isDarkMode) DarkBackground else Color(0xFFF4F8FF)
+    val snackbarContainer = if (isDarkMode) CardBackground else Color(0xFFEAF1FF)
+    val snackbarContent = if (isDarkMode) Color.White else Color(0xFF1A3150)
+    val snackbarAction = if (isDarkMode) PrimaryCyan else Color(0xFF2E77D0)
+
     Scaffold(
-        containerColor = DarkBackground,
+        containerColor = scaffoldBg,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState) { data ->
                 Snackbar(
                     snackbarData = data,
-                    containerColor = CardBackground,
-                    contentColor = Color.White,
-                    actionColor = PrimaryCyan,
+                    containerColor = snackbarContainer,
+                    contentColor = snackbarContent,
+                    actionColor = snackbarAction,
                     shape = RoundedCornerShape(Dimens.SmallCornerRadius)
                 )
             }
@@ -231,6 +243,8 @@ fun AppNavGraph(
                     recordings = recordings,
                     isLoading = isLoading,
                     isDarkMode = isDarkMode,
+                    searchQueryOverride = taskSearchOverride,
+                    onSearchQueryOverrideApplied = { taskSearchOverride = null },
                     onToggleCompleted = { id, completed ->
                         viewModel.toggleCompleted(id, completed)
                     },
@@ -260,10 +274,12 @@ fun AppNavGraph(
                                 createdAt = timestamp
                             )
                         )
-                        if (syncOption == CalendarSyncOption.APP_AND_GOOGLE) {
-                            onSyncEventToGoogleCalendar(date, title, time, notes)
+                        if (syncOption == CalendarSyncOption.APP_AND_DEVICE_CALENDAR) {
+                            onSyncEventToDeviceCalendar(date, title, time, notes)
                         }
-                    }
+                    },
+                    onGetEventsForDay = onGetDeviceCalendarEventsForDay,
+                    onAddNoteToCalendarEvent = onAddNoteToDeviceCalendarEvent
                 )
             }
             composable(BottomNavItem.Stats.route) {
@@ -282,7 +298,29 @@ fun AppNavGraph(
                     onSignOut = onSignOut,
                     onUpdateName = onUpdateName,
                     isDarkMode = isDarkMode,
-                    onDarkModeChange = onDarkModeChange
+                    onDarkModeChange = onDarkModeChange,
+                    onOpenNotifications = {
+                        navController.navigate("notifications")
+                    }
+                )
+            }
+            composable("notifications") {
+                NotificationsScreen(
+                    notifications = notificationHistory,
+                    unreadCount = unreadNotifications,
+                    isDarkMode = isDarkMode,
+                    onMarkRead = { id -> viewModel.markNotificationRead(id) },
+                    onMarkAllRead = { viewModel.markAllNotificationsRead() },
+                    onDelete = { id -> viewModel.deleteNotification(id) },
+                    onClearAll = { viewModel.clearAllNotifications() },
+                    onOpenTask = { taskId ->
+                        val match = recordings.firstOrNull { it.id == taskId }
+                        taskSearchOverride = match?.text?.takeIf { it.isNotBlank() }
+                        navController.navigate(BottomNavItem.Tasks.route) {
+                            popUpTo(navController.graph.startDestinationId)
+                            launchSingleTop = true
+                        }
+                    }
                 )
             }
         }
@@ -306,8 +344,8 @@ fun BottomNavigationBar(
     val currentRoute =
         navController.currentBackStackEntryAsState().value?.destination?.route
 
-    val navBg = if (isDarkMode) Color(0x3DFFFFFF) else Color(0xD9FFFFFF)
-    val navBorder = if (isDarkMode) Color(0x59FFFFFF) else Color(0x668DB7FF)
+    val glassBg = if (isDarkMode) Color(0x26FFFFFF) else Color(0x80FFFFFF)
+    val glassBorder = if (isDarkMode) Color(0x40FFFFFF) else Color(0x669BC3FF)
     val selectedColor = if (isDarkMode) Color(0xFF67D7FF) else Color(0xFF2E77D0)
     val unselectedColor = if (isDarkMode) Color(0xB3D2DDF5) else Color(0xFF6B7FA0)
 
@@ -316,8 +354,8 @@ fun BottomNavigationBar(
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(24.dp))
-            .background(navBg)
-            .border(width = 1.dp, color = navBorder, shape = RoundedCornerShape(24.dp))
+            .background(glassBg)
+            .border(width = 1.dp, color = glassBorder, shape = RoundedCornerShape(24.dp))
             .padding(horizontal = 8.dp, vertical = 8.dp)
     ) {
         Row(
