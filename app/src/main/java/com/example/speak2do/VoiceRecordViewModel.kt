@@ -114,6 +114,20 @@ class VoiceRecordViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    fun updateRecordText(id: Long, newText: String) {
+        val normalized = newText.trim()
+        if (normalized.isBlank()) return
+        viewModelScope.launch {
+            dao.updateText(id, normalized)
+            val updated = dao.getById(id) ?: return@launch
+            if (isNotifiableEvent(updated)) {
+                DeadlineReminderScheduler.scheduleReminder(appContext, updated)
+            } else {
+                DeadlineReminderScheduler.cancelReminder(appContext, id)
+            }
+        }
+    }
+
     suspend fun getRecordById(id: Long) = dao.getById(id)
 
     fun markNotificationRead(notificationId: Long) {

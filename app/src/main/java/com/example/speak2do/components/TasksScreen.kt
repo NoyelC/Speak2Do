@@ -1,5 +1,6 @@
 package com.example.speak2do.components
 
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import com.example.speak2do.calendar.CalendarDayEvent
 import com.example.speak2do.model.RecordingItem
 import com.example.speak2do.ui.theme.Dimens
@@ -77,6 +79,11 @@ enum class CalendarSyncOption {
     APP_ONLY,
     APP_AND_DEVICE_CALENDAR
 }
+
+private data class DatedRecording(
+    val item: RecordingItem,
+    val localDate: LocalDate
+)
 
 private val TasksBackground = Color(0xFF081826)
 private val TasksCard = Color(0xFF12263D)
@@ -97,12 +104,17 @@ fun TasksScreen(
     searchQueryOverride: String? = null,
     onSearchQueryOverrideApplied: () -> Unit = {},
     onToggleCompleted: (Long, Boolean) -> Unit,
+    onUpdateTaskText: (Long, String) -> Unit = { _, _ -> },
     onDelete: (Long) -> Unit = {},
     onAddEvent: (LocalDate, String, String, String, CalendarSyncOption) -> Unit = { _, _, _, _, _ -> },
     onGetEventsForDay: suspend (LocalDate) -> Result<List<CalendarDayEvent>> = { Result.success(emptyList()) },
     onAddNoteToCalendarEvent: suspend (Long, String) -> Result<Unit> = { _, _ -> Result.success(Unit) },
     isDarkMode: Boolean = true
 ) {
+    val context = LocalContext.current
+    val appPrefs = remember(context) {
+        context.applicationContext.getSharedPreferences("speak2do_prefs", Context.MODE_PRIVATE)
+    }
     var selectedTab by remember { mutableStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
@@ -119,6 +131,9 @@ fun TasksScreen(
     var noteInput by remember { mutableStateOf("") }
     var savingNote by remember { mutableStateOf(false) }
     var selectedTaskForDetails by remember { mutableStateOf<RecordingItem?>(null) }
+    var showLongPressTip by remember {
+        mutableStateOf(!appPrefs.getBoolean("tasks_long_press_tip_seen", false))
+    }
     val scope = rememberCoroutineScope()
 
     val tabs = listOf("All", "Today", "Upcoming")
@@ -136,41 +151,51 @@ fun TasksScreen(
 
     val today = LocalDate.now()
     var visibleMonth by remember { mutableStateOf(YearMonth.now()) }
+    val systemZone = remember { ZoneId.systemDefault() }
 
-    val recordingsByDate = remember(recordings) {
-        recordings.groupBy { item ->
-            Instant.ofEpochMilli(item.createdAt)
-                .atZone(ZoneId.systemDefault())
-                .toLocalDate()
+    val datedRecordings = remember(recordings, systemZone) {
+        recordings.map { item ->
+            DatedRecording(
+                item = item,
+                localDate = Instant.ofEpochMilli(item.createdAt)
+                    .atZone(systemZone)
+                    .toLocalDate()
+            )
         }
     }
-    val selectedDateCount = selectedDate?.let { recordingsByDate[it]?.size ?: 0 } ?: 0
+
+    val recordingsByDate = remember(datedRecordings) {
+        datedRecordings.groupBy(
+            keySelector = { it.localDate },
+            valueTransform = { it.item }
+        )
+    }
+    val selectedDateCount = remember(selectedDate, recordingsByDate) {
+        selectedDate?.let { recordingsByDate[it]?.size ?: 0 } ?: 0
+    }
     val normalizedQuery = searchQuery.trim()
 
-    val filteredRecordings = when (selectedTab) {
-        1 -> recordings.filter { item ->
-            val itemDate = Instant.ofEpochMilli(item.createdAt)
-                .atZone(ZoneId.systemDefault())
-                .toLocalDate()
-            itemDate == today
+    val filteredRecordings = remember(
+        datedRecordings,
+        selectedTab,
+        selectedDate,
+        normalizedQuery,
+        today
+    ) {
+        val tabFiltered = when (selectedTab) {
+            1 -> datedRecordings.filter { it.localDate == today }
+            2 -> datedRecordings.filter { !it.item.isCompleted }
+            else -> datedRecordings
         }
 
-        2 -> recordings.filter { item -> !item.isCompleted }
-        else -> recordings
-    }.let { tabFiltered ->
         val dateFiltered = selectedDate?.let { date ->
-            tabFiltered.filter { item ->
-                val itemDate = Instant.ofEpochMilli(item.createdAt)
-                    .atZone(ZoneId.systemDefault())
-                    .toLocalDate()
-                itemDate == date
-            }
+            tabFiltered.filter { it.localDate == date }
         } ?: tabFiltered
 
         if (normalizedQuery.isBlank()) {
-            dateFiltered
+            dateFiltered.map { it.item }
         } else {
-            dateFiltered.filter { item ->
+            dateFiltered.map { it.item }.filter { item ->
                 item.text.contains(normalizedQuery, ignoreCase = true) ||
                     item.dateTime.contains(normalizedQuery, ignoreCase = true) ||
                     item.duration.contains(normalizedQuery, ignoreCase = true)
@@ -183,7 +208,7 @@ fun TasksScreen(
     val tasksListState = rememberLazyListState()
     val calendarCollapsed by remember {
         derivedStateOf {
-            tasksListState.firstVisibleItemIndex > 0 || tasksListState.firstVisibleItemScrollOffset > 72
+            tasksListState.firstVisibleItemIndex > 0 || tasksListState.firstVisibleItemScrollOffset > 8
         }
     }
 
@@ -376,6 +401,30 @@ fun TasksScreen(
                 }
 
                 Spacer(Modifier.height(Dimens.SpacingMd))
+                AnimatedVisibility(visible = showLongPressTip) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Tip: Long-press a task to see full details",
+                            color = mutedTextColor,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = "Got it",
+                            color = accentColor,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable {
+                                showLongPressTip = false
+                                appPrefs.edit().putBoolean("tasks_long_press_tip_seen", true).apply()
+                            }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(Dimens.SpacingSm))
 
                 if (isLoading) {
                     ShimmerTaskList(count = 4)
@@ -395,7 +444,13 @@ fun TasksScreen(
                                     searchQuery = normalizedQuery,
                                     useTasksStyle = true,
                                     isDarkMode = isDarkMode,
-                                    onCardLongClick = { selectedTaskForDetails = it }
+                                    onCardLongClick = {
+                                        selectedTaskForDetails = it
+                                        if (showLongPressTip) {
+                                            showLongPressTip = false
+                                            appPrefs.edit().putBoolean("tasks_long_press_tip_seen", true).apply()
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -697,7 +752,15 @@ fun TasksScreen(
             item = selectedTaskForDetails!!,
             onDismiss = { selectedTaskForDetails = null },
             isDarkMode = isDarkMode,
-            title = "Task Details"
+            title = "Task Details",
+            onMarkComplete = { item ->
+                onToggleCompleted(item.id, item.isCompleted)
+                selectedTaskForDetails = item.copy(isCompleted = !item.isCompleted)
+            },
+            onEditTask = { item, updatedText ->
+                onUpdateTaskText(item.id, updatedText)
+                selectedTaskForDetails = item.copy(text = updatedText)
+            }
         )
     }
 }

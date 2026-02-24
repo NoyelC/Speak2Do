@@ -65,6 +65,7 @@ import com.example.speak2do.components.NotificationsScreen
 import com.example.speak2do.components.TasksScreen
 import com.example.speak2do.data.VoiceRecordEntity
 import com.example.speak2do.model.RecordingItem
+import com.example.speak2do.util.TaskCategorizer
 import com.example.speak2do.ui.theme.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -117,7 +118,7 @@ fun AppNavGraph(
             id = entity.id,
             text = entity.text,
             dateTime = entity.dateTime,
-            duration = "VOICE",
+            duration = entity.category,
             progress = entity.progress,
             isCompleted = entity.isCompleted,
             createdAt = entity.createdAt
@@ -248,6 +249,9 @@ fun AppNavGraph(
                     onToggleCompleted = { id, completed ->
                         viewModel.toggleCompleted(id, completed)
                     },
+                    onUpdateTaskText = { id, updatedText ->
+                        viewModel.updateRecordText(id, updatedText)
+                    },
                     onDelete = onDeleteWithUndo,
                     onAddEvent = { date, title, time, notes, syncOption ->
                         val localTime = try {
@@ -270,6 +274,7 @@ fun AppNavGraph(
                                 dateTime = displayTime,
                                 fullDateTime = fullDateTime,
                                 duration = "EVENT",
+                                category = TaskCategorizer.categorize(content, "EVENT"),
                                 progress = 1f,
                                 createdAt = timestamp
                             )

@@ -22,6 +22,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -83,6 +85,7 @@ fun RecordingCard(
         }
     } else {
         if (item.isCompleted) {
+            
             Brush.linearGradient(listOf(BaseCardBgDone, BaseCardBgDone))
         } else {
             Brush.linearGradient(listOf(BaseCardBg, BaseCardBg))
@@ -205,13 +208,15 @@ fun RecordingCard(
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = item.dateTime,
-                        color = if (useTasksStyle) tasksTextMuted else BaseTextMuted,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Normal
-                    )
-                }
+                Text(
+                    text = item.dateTime,
+                    color = if (useTasksStyle) tasksTextMuted else BaseTextMuted,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
                 Text(
                     text = "\u2022",
@@ -227,7 +232,9 @@ fun RecordingCard(
                         if (useTasksStyle) tasksAccent else BaseAccent
                     },
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -299,6 +306,7 @@ fun SwipeableRecordingCard(
     onCardClick: ((RecordingItem) -> Unit)? = null,
     onCardLongClick: ((RecordingItem) -> Unit)? = null
 ) {
+    val haptics = LocalHapticFeedback.current
     val dismissState = rememberSwipeToDismissBoxState(
         positionalThreshold = { totalDistance -> totalDistance * 0.4f },
         confirmValueChange = { value ->
@@ -363,8 +371,13 @@ fun SwipeableRecordingCard(
     ) {
         val cardModifier = if (onCardClick != null || onCardLongClick != null) {
             Modifier.combinedClickable(
+                onClickLabel = "Open task",
+                onLongClickLabel = "View full task details",
                 onClick = { onCardClick?.invoke(item) },
-                onLongClick = { onCardLongClick?.invoke(item) }
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onCardLongClick?.invoke(item)
+                }
             )
         } else {
             Modifier

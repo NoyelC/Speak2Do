@@ -5,6 +5,7 @@ import com.example.speak2do.network.KtorClientProvider.httpClient
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ResponseException
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
@@ -14,6 +15,8 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.Json
@@ -27,9 +30,13 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import java.io.IOException
+import java.net.SocketException
+import java.net.SocketTimeoutException
+import kotlin.math.min
 
 data class GeminiConfig(
-    val modelName: String = "gemini-2.5-flash",
+    val modelName: String = "gemini-3-flash-preview",
     val maxRetries: Int = 3,
     val baseRetryDelay: Long = 2000L,
     val maxRetryDelay: Long = 30000L,
@@ -43,6 +50,7 @@ class GeminiService(
     private val apiKey: String,
     private val config : GeminiConfig = GeminiConfig()
 ) {
+    private data class GeminiHttpException(val statusCode: Int, override val message: String) : Exception(message)
 
    /* suspend fun generateText(
         currentDate: String,
@@ -237,25 +245,54 @@ class GeminiService(
         }
 
         val requestBody = createTaskExtractionRequest(currentDate, transcript)
-
-        Log.e("GEMINI::", "extractTaskFromTranscript:--->$currentDate ", )
-        Log.e("GEMINI::", "extractTaskFromTranscripttranscript:--->$transcript ", )
-
-        val response = httpClient.post(generateUrl) {
-            contentType(ContentType.Application.Json)
-            setBody(requestBody)
-            timeout {
-                requestTimeoutMillis = config.defaultRequestTimeout
-                connectTimeoutMillis = config.connectTimeout
+        executeWithRetry("extractTaskFromTranscript") { attempt ->
+            val response = httpClient.post(generateUrl) {
+                contentType(ContentType.Application.Json)
+                setBody(requestBody)
+                timeout {
+                    requestTimeoutMillis = config.defaultRequestTimeout
+                    connectTimeoutMillis = config.connectTimeout
+                }
             }
+
+            val responseText = extractResponseText(response)
+            if (attempt > 1) {
+                Log.w("GeminiService", "Request recovered on retry attempt $attempt.")
+            }
+            decodeExtractedTaskSafely(responseText)
         }
-        Log.e("GEMINI::", "extractTaskFromTranscript:----->$response ", )
+    }
 
-        val responseText = extractResponseText(response)
-        Log.e("GEMINI::", "extractTaskFromTranscript:response---->$responseText ", )
-        val cleaned = responseText.cleanJson()
+    /**
+     * Optional tuned path:
+     * - Keeps the existing prompt unchanged
+     * - Uses a stricter, shorter prompt for better JSON reliability
+     */
+    suspend fun extractTaskFromTranscriptTuned(
+        currentDate: String?,
+        transcript: String
+    ): Result<ExtractedTask> = runCatching {
+        if (apiKey.isBlank()) {
+            throw Exception("Gemini API key is missing. Configure GEMINI_API_KEY in BuildConfig.")
+        }
 
-        jsonSerializer.decodeFromString<ExtractedTask>(cleaned)
+        val requestBody = createTaskExtractionRequestTuned(currentDate, transcript)
+        executeWithRetry("extractTaskFromTranscriptTuned") { attempt ->
+            val response = httpClient.post(generateUrl) {
+                contentType(ContentType.Application.Json)
+                setBody(requestBody)
+                timeout {
+                    requestTimeoutMillis = config.defaultRequestTimeout
+                    connectTimeoutMillis = config.connectTimeout
+                }
+            }
+
+            val responseText = extractResponseText(response)
+            if (attempt > 1) {
+                Log.w("GeminiService", "Tuned request recovered on retry attempt $attempt.")
+            }
+            decodeExtractedTaskSafely(responseText)
+        }
     }
 
     // -----------------------------
@@ -338,6 +375,65 @@ Return ONLY valid JSON.
         }
     }
 
+    private fun createTaskExtractionRequestTuned(
+        currentDate: String?,
+        transcript: String
+    ): JsonObject {
+        val prompt = """
+You extract one actionable task from voice transcript input.
+
+INPUT
+current_date: ${currentDate ?: "MISSING"}
+transcript: $transcript
+
+OUTPUT RULES
+1) Return exactly one JSON object. No markdown, no backticks, no explanation.
+2) JSON keys must be exactly:
+   task_title, description, date_time, priority, additional_notes
+3) Allowed values:
+   - task_title: string or null
+   - description: string (always non-empty)
+   - date_time: ISO 8601 string or null
+   - priority: "low" | "medium" | "high"
+   - additional_notes: string or null
+4) If no actionable task exists, return:
+{"task_title":null,"description":"No clear actionable task detected.","date_time":null,"priority":"medium","additional_notes":null}
+5) Date/time resolution:
+   - today = current_date
+   - tomorrow = current_date + 1 day
+   - day after tomorrow = current_date + 2 days
+   - next week = current_date + 7 days
+   - next month = same day next month
+   - date without time => 09:00:00 local time
+   - time without date => use current_date
+   - if current_date missing and only relative date/time is present => date_time null
+6) Priority mapping:
+   - urgent/asap/immediately/critical/important => high
+   - casual/non-urgent wording => low
+   - default => medium
+7) Ensure valid, closed JSON. No trailing commas.
+""".trimIndent()
+
+        return buildJsonObject {
+            put("contents", buildJsonArray {
+                add(buildJsonObject {
+                    put("parts", buildJsonArray {
+                        add(buildJsonObject {
+                            put("text", prompt)
+                        })
+                    })
+                })
+            })
+
+            put("generationConfig", buildJsonObject {
+                put("temperature", 0.1)
+                put("topP", 0.8)
+                put("maxOutputTokens", 256)
+                put("responseMimeType", "application/json")
+            })
+        }
+    }
+
     // -----------------------------
     // Response Extraction
     // -----------------------------
@@ -349,7 +445,10 @@ Return ONLY valid JSON.
             if (error.contains("reported as leaked", ignoreCase = true)) {
                 throw Exception("Gemini API key was revoked as leaked. Generate a new key and update GEMINI_API_KEY.")
             }
-            throw Exception("Gemini API error: ${response.status} - $error")
+            throw GeminiHttpException(
+                statusCode = response.status.value,
+                message = "Gemini API error: ${response.status} - $error"
+            )
         }
 
         val responseBody = response.body<String>()
@@ -358,7 +457,8 @@ Return ONLY valid JSON.
 
         json["error"]?.jsonObject?.let {
             val message = it["message"]?.jsonPrimitive?.content ?: "Unknown error"
-            throw Exception(message)
+            val statusCode = it["code"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: -1
+            throw GeminiHttpException(statusCode = statusCode, message = message)
         }
 
         return json["candidates"]?.jsonArray
@@ -370,12 +470,127 @@ Return ONLY valid JSON.
             ?: throw Exception("No valid response from Gemini")
     }
 
+    private suspend fun <T> executeWithRetry(
+        operationName: String,
+        block: suspend (attempt: Int) -> T
+    ): T {
+        val totalAttempts = maxOf(1, config.maxRetries)
+        var attempt = 1
+        var lastError: Throwable? = null
+
+        while (attempt <= totalAttempts) {
+            try {
+                return block(attempt)
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                lastError = t
+
+                val shouldRetry = attempt < totalAttempts && isRetryableFailure(t)
+                if (!shouldRetry) break
+
+                val delayMs = computeRetryDelay(attempt)
+                Log.w(
+                    "GeminiService",
+                    "$operationName failed on attempt $attempt/$totalAttempts. Retrying in ${delayMs}ms. Cause: ${t.message}"
+                )
+                delay(delayMs)
+                attempt++
+            }
+        }
+
+        throw lastError ?: Exception("$operationName failed with unknown error")
+    }
+
+    private fun isRetryableFailure(t: Throwable): Boolean {
+        return when (t) {
+            is GeminiHttpException -> t.statusCode in setOf(429, 500, 502, 503, 504) ||
+                t.message.contains("high demand", ignoreCase = true) ||
+                t.message.contains("UNAVAILABLE", ignoreCase = true)
+            is ResponseException -> t.response.status.value in setOf(429, 500, 502, 503, 504)
+            is HttpRequestTimeoutException,
+            is SocketTimeoutException,
+            is SocketException,
+            is IOException -> true
+            else -> t.message?.contains("Software caused connection abort", ignoreCase = true) == true
+        }
+    }
+
+    private fun computeRetryDelay(attempt: Int): Long {
+        val exponent = 1L shl (attempt - 1).coerceAtMost(30)
+        return min(config.baseRetryDelay * exponent, config.maxRetryDelay)
+    }
+
     private fun String.cleanJson(): String =
         trim()
             .removePrefix("```json")
+            .removePrefix("```JSON")
             .removePrefix("```")
             .removeSuffix("```")
             .trim()
+
+    private fun decodeExtractedTaskSafely(rawText: String): ExtractedTask {
+        val cleaned = rawText.cleanJson()
+
+        runCatching {
+            return jsonSerializer.decodeFromString<ExtractedTask>(cleaned)
+        }
+
+        // Fallback for malformed/truncated responses (for example missing closing quote/brace).
+        val title = extractNullableField(cleaned, "task_title")
+        val description = extractStringField(cleaned, "description")
+            ?: "No clear actionable task detected."
+        val dateTime = extractNullableField(cleaned, "date_time")
+        val priority = normalizePriority(
+            extractStringField(cleaned, "priority")
+                ?: extractUnclosedStringPrefix(cleaned, "priority")
+        )
+        val notes = extractNullableField(cleaned, "additional_notes")
+
+        return ExtractedTask(
+            task_title = title,
+            description = description,
+            date_time = dateTime,
+            priority = priority,
+            additional_notes = notes
+        )
+    }
+
+    private fun extractNullableField(input: String, key: String): String? {
+        val nullPattern = Regex("\"$key\"\\s*:\\s*null", RegexOption.IGNORE_CASE)
+        if (nullPattern.containsMatchIn(input)) return null
+        return extractStringField(input, key) ?: extractUnclosedStringPrefix(input, key)
+    }
+
+    private fun extractStringField(input: String, key: String): String? {
+        val pattern = Regex("\"$key\"\\s*:\\s*\"([^\"]*)\"", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+        return pattern.find(input)?.groupValues?.getOrNull(1)?.trim()
+    }
+
+    private fun extractUnclosedStringPrefix(input: String, key: String): String? {
+        val keyPattern = Regex("\"$key\"\\s*:\\s*\"?", RegexOption.IGNORE_CASE)
+        val match = keyPattern.find(input) ?: return null
+        val start = match.range.last + 1
+        if (start !in input.indices) return null
+        val remainder = input.substring(start)
+        val value = remainder
+            .lineSequence()
+            .firstOrNull()
+            .orEmpty()
+            .substringBefore(",")
+            .substringBefore("}")
+            .trim()
+            .trim('"')
+        return value.ifBlank { null }
+    }
+
+    private fun normalizePriority(raw: String?): String {
+        return when (raw?.trim()?.lowercase()) {
+            "low" -> "low"
+            "high" -> "high"
+            "medium" -> "medium"
+            else -> "medium"
+        }
+    }
 
 
 }

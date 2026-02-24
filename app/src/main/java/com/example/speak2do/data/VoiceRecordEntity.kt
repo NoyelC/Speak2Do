@@ -11,6 +11,7 @@ data class VoiceRecordEntity(
     val dateTime: String,
     val fullDateTime: String,
     val duration: String,
+    val category: String = "General",
     val progress: Float,
     val isCompleted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()

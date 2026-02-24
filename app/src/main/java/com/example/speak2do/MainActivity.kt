@@ -42,6 +42,7 @@ import com.example.speak2do.navigation.AppNavGraph
 import com.example.speak2do.reminder.DeadlineReminderScheduler
 import com.example.speak2do.ui.theme.AppThemeState
 import com.example.speak2do.ui.theme.Speak2DoTheme
+import com.example.speak2do.util.TaskCategorizer
 import com.example.speak2do.util.formatTime
 import com.example.speak2do.network.gemini.Gemini
 import com.example.speak2do.network.gemini.GeminiRepository
@@ -300,6 +301,7 @@ class MainActivity : ComponentActivity() {
                         dateTime = dateTime,
                         fullDateTime = fullDateTime,
                         duration = formatTime(viewModel.recordingTime.value),
+                        category = TaskCategorizer.categorize(text),
                         progress = 1f
                     )
 
@@ -425,6 +427,7 @@ class MainActivity : ComponentActivity() {
                 dateTime = displayTime,
                 fullDateTime = fullDateTime,
                 duration = "EVENT",
+                category = TaskCategorizer.categorize(content, "EVENT"),
                 progress = 1f,
                 createdAt = parsedDeadline.startMillis
             )
