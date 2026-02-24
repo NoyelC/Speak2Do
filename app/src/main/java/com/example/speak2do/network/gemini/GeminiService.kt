@@ -36,7 +36,7 @@ import java.net.SocketTimeoutException
 import kotlin.math.min
 
 data class GeminiConfig(
-    val modelName: String = "gemini-3-flash-preview",
+    val modelName: String = "gemini-2.5-flash-lite",
     val maxRetries: Int = 3,
     val baseRetryDelay: Long = 2000L,
     val maxRetryDelay: Long = 30000L,
@@ -461,13 +461,33 @@ OUTPUT RULES
             throw GeminiHttpException(statusCode = statusCode, message = message)
         }
 
-        return json["candidates"]?.jsonArray
-            ?.firstOrNull()?.jsonObject
-            ?.get("content")?.jsonObject
-            ?.get("parts")?.jsonArray
-            ?.firstOrNull()?.jsonObject
-            ?.get("text")?.jsonPrimitive?.content
-            ?: throw Exception("No valid response from Gemini")
+        val candidates = json["candidates"]?.jsonArray.orEmpty()
+        val extractedTexts = candidates
+            .mapNotNull { candidate ->
+                candidate.jsonObject["content"]?.jsonObject
+                    ?.get("parts")?.jsonArray
+                    ?.mapNotNull { part ->
+                        part.jsonObject["text"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                    }
+                    ?.joinToString("\n")
+                    ?.takeIf { it.isNotBlank() }
+            }
+
+        if (extractedTexts.isNotEmpty()) {
+            return extractedTexts.joinToString("\n").trim()
+        }
+
+        val blockReason = json["promptFeedback"]?.jsonObject
+            ?.get("blockReason")?.jsonPrimitive?.contentOrNull
+        val finishReason = candidates.firstOrNull()?.jsonObject
+            ?.get("finishReason")?.jsonPrimitive?.contentOrNull
+        val reason = listOfNotNull(
+            blockReason?.let { "Blocked: $it" },
+            finishReason?.let { "Finish reason: $it" }
+        ).joinToString(" | ").ifBlank { "Empty Gemini response" }
+
+        Log.w("GeminiService", "Gemini returned no text candidate. Falling back. $reason")
+        return emptyTaskJson(reason)
     }
 
     private suspend fun <T> executeWithRetry(
@@ -518,6 +538,16 @@ OUTPUT RULES
     private fun computeRetryDelay(attempt: Int): Long {
         val exponent = 1L shl (attempt - 1).coerceAtMost(30)
         return min(config.baseRetryDelay * exponent, config.maxRetryDelay)
+    }
+
+    private fun emptyTaskJson(reason: String): String {
+        return buildJsonObject {
+            put("task_title", JsonNull)
+            put("description", "No clear actionable task detected. $reason")
+            put("date_time", JsonNull)
+            put("priority", "medium")
+            put("additional_notes", JsonNull)
+        }.toString()
     }
 
     private fun String.cleanJson(): String =

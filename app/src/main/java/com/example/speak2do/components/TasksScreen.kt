@@ -1,6 +1,7 @@
 package com.example.speak2do.components
 
 import android.content.Context
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -29,6 +30,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,7 +46,6 @@ import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -134,6 +136,8 @@ fun TasksScreen(
     var showLongPressTip by remember {
         mutableStateOf(!appPrefs.getBoolean("tasks_long_press_tip_seen", false))
     }
+    var calendarCollapsed by remember { mutableStateOf(false) }
+    var calendarPinnedByUser by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     val tabs = listOf("All", "Today", "Upcoming")
@@ -206,9 +210,11 @@ fun TasksScreen(
     val pullToRefreshState = rememberPullToRefreshState()
     var isRefreshing by remember { mutableStateOf(false) }
     val tasksListState = rememberLazyListState()
-    val calendarCollapsed by remember {
-        derivedStateOf {
-            tasksListState.firstVisibleItemIndex > 0 || tasksListState.firstVisibleItemScrollOffset > 8
+
+    LaunchedEffect(filteredRecordings.size, selectedDate, normalizedQuery, calendarPinnedByUser) {
+        if (!calendarPinnedByUser) {
+            calendarCollapsed = selectedDate != null ||
+                (normalizedQuery.isBlank() && filteredRecordings.size <= 3)
         }
     }
 
@@ -331,6 +337,10 @@ fun TasksScreen(
                     visibleMonth = visibleMonth,
                     selectedDate = selectedDate,
                     collapsed = calendarCollapsed,
+                    onToggleCollapsed = {
+                        calendarPinnedByUser = true
+                        calendarCollapsed = !calendarCollapsed
+                    },
                     recordingsByDate = recordingsByDate,
                     cardColor = cardColor,
                     primaryTextColor = primaryTextColor,
@@ -348,6 +358,8 @@ fun TasksScreen(
                     },
                     onDateSelected = { clicked ->
                         selectedDate = clicked
+                        calendarCollapsed = true
+                        calendarPinnedByUser = true
                         showDayEventsDialog = true
                         dayEventsLoading = true
                         dayEventsError = null
@@ -778,6 +790,7 @@ private fun TasksCalendarCard(
     visibleMonth: YearMonth,
     selectedDate: LocalDate?,
     collapsed: Boolean,
+    onToggleCollapsed: () -> Unit,
     recordingsByDate: Map<LocalDate, List<RecordingItem>>,
     cardColor: Color,
     primaryTextColor: Color,
@@ -806,6 +819,7 @@ private fun TasksCalendarCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .animateContentSize(animationSpec = tween(220))
             .clip(RoundedCornerShape(Dimens.CardCornerRadius))
             .background(cardColor)
             .padding(if (collapsed) Dimens.SpacingMd else Dimens.SpacingLg)
@@ -883,6 +897,13 @@ private fun TasksCalendarCard(
                         imageVector = Icons.Rounded.ChevronRight,
                         contentDescription = "Next month",
                         tint = mutedTextColor
+                    )
+                }
+                IconButton(onClick = onToggleCollapsed) {
+                    Icon(
+                        imageVector = if (collapsed) Icons.Rounded.ExpandMore else Icons.Rounded.ExpandLess,
+                        contentDescription = if (collapsed) "Expand calendar" else "Collapse calendar",
+                        tint = accentColor
                     )
                 }
             }

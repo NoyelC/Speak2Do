@@ -7,6 +7,7 @@ import com.example.speak2do.calendar.DeadlineExtractionInput
 import com.example.speak2do.network.gemini.ExtractedTask
 import com.example.speak2do.network.gemini.GeminiRepository
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -80,17 +81,24 @@ class MainScreenViewModel(private val repository: GeminiRepository) : ViewModel(
                             extractedTask = task
                         )
                     )
-                    saveResultToFirestore(
-                        userId = userId,
-                        userDisplayName = userDisplayName,
-                        userPhone = userPhone,
-                        userEmail = userEmail,
-                        currentDate = currentDate,
-                        transcript = transcript,
-                        task = task,
-                        taskJson = taskJson
-                    )
-                    Log.d("MainScreenViewModel", "Gemini task saved for user: $userId")
+                    viewModelScope.launch(Dispatchers.IO) {
+                        runCatching {
+                            saveResultToFirestore(
+                                userId = userId,
+                                userDisplayName = userDisplayName,
+                                userPhone = userPhone,
+                                userEmail = userEmail,
+                                currentDate = currentDate,
+                                transcript = transcript,
+                                task = task,
+                                taskJson = taskJson
+                            )
+                        }.onSuccess {
+                            Log.d("MainScreenViewModel", "Gemini task saved for user: $userId")
+                        }.onFailure { e ->
+                            Log.e("MainScreenViewModel", "Failed to save Gemini task to Firestore", e)
+                        }
+                    }
                 } else {
                     val throwable = result.exceptionOrNull()
                     _error.value = throwable?.message ?: "Gemini request failed"
@@ -139,27 +147,21 @@ class MainScreenViewModel(private val repository: GeminiRepository) : ViewModel(
         )
 
         suspendCancellableCoroutine<Unit> { cont ->
-            firestore
+            val accountDocRef = firestore
                 .collection(FIRESTORE_DATABASE)
                 .document(FIRESTORE_USERS_DOCUMENT)
                 .collection(FIRESTORE_USER_ACCOUNTS_COLLECTION)
                 .document(userId)
-                .set(userProfilePayload)
+            val taskDocRef = accountDocRef
+                .collection(FIRESTORE_TASKS_COLLECTION)
+                .document()
+
+            firestore.batch()
+                .set(accountDocRef, userProfilePayload)
+                .set(taskDocRef, payload)
+                .commit()
                 .addOnSuccessListener {
-                    firestore
-                        .collection(FIRESTORE_DATABASE)
-                        .document(FIRESTORE_USERS_DOCUMENT)
-                        .collection(FIRESTORE_USER_ACCOUNTS_COLLECTION)
-                        .document(userId)
-                        .collection(FIRESTORE_TASKS_COLLECTION)
-                        .document()
-                        .set(payload)
-                        .addOnSuccessListener {
-                            if (cont.isActive) cont.resume(Unit)
-                        }
-                        .addOnFailureListener { e: Exception ->
-                            if (cont.isActive) cont.resumeWithException(e)
-                        }
+                    if (cont.isActive) cont.resume(Unit)
                 }
                 .addOnFailureListener { e: Exception ->
                     if (cont.isActive) cont.resumeWithException(e)
