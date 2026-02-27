@@ -374,9 +374,11 @@ fun BottomNavigationBar(
                         .weight(1f)
                         .clip(RoundedCornerShape(16.dp))
                         .clickable {
-                            navController.navigate(item.route) {
-                                popUpTo(navController.graph.startDestinationId)
-                                launchSingleTop = true
+                            if (currentRoute != item.route) {
+                                navController.navigate(item.route) {
+                                    popUpTo(navController.graph.startDestinationId)
+                                    launchSingleTop = true
+                                }
                             }
                         }
                         .padding(vertical = 8.dp),

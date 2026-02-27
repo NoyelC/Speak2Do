@@ -306,6 +306,7 @@ class MainActivity : ComponentActivity() {
                     )
 
                     viewModel.insertRecord(entity)
+                    Toast.makeText(this@MainActivity, "\u2714 Task added successfully", Toast.LENGTH_SHORT).show()
                 }
 
                 stopRecording()

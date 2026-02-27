@@ -1,12 +1,13 @@
 package com.example.speak2do.components
 
-import android.content.Context
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -51,23 +52,29 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
 import com.example.speak2do.calendar.CalendarDayEvent
 import com.example.speak2do.model.RecordingItem
 import com.example.speak2do.ui.theme.Dimens
 import com.example.speak2do.ui.theme.SuccessGreen
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -113,10 +120,6 @@ fun TasksScreen(
     onAddNoteToCalendarEvent: suspend (Long, String) -> Result<Unit> = { _, _ -> Result.success(Unit) },
     isDarkMode: Boolean = true
 ) {
-    val context = LocalContext.current
-    val appPrefs = remember(context) {
-        context.applicationContext.getSharedPreferences("speak2do_prefs", Context.MODE_PRIVATE)
-    }
     var selectedTab by remember { mutableStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
@@ -133,15 +136,11 @@ fun TasksScreen(
     var noteInput by remember { mutableStateOf("") }
     var savingNote by remember { mutableStateOf(false) }
     var selectedTaskForDetails by remember { mutableStateOf<RecordingItem?>(null) }
-    var showLongPressTip by remember {
-        mutableStateOf(!appPrefs.getBoolean("tasks_long_press_tip_seen", false))
-    }
     var calendarCollapsed by remember { mutableStateOf(false) }
-    var calendarPinnedByUser by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    val tabs = listOf("All", "Today", "Upcoming")
-    val bgColor = if (isDarkMode) TasksBackground else Color(0xFFF4F7FF)
+    val tabs = listOf("Today", "Upcoming")
+    val bgColor = if (isDarkMode) Color(0xFF050B18) else Color(0xFFF4F8FF)
     val cardColor = if (isDarkMode) TasksCard else Color(0xFFEAF1FF)
     val accentColor = if (isDarkMode) TasksAccent else Color(0xFF1D8A9A)
     val accentSoftColor = if (isDarkMode) TasksAccentSoft else Color(0x331D8A9A)
@@ -187,9 +186,9 @@ fun TasksScreen(
         today
     ) {
         val tabFiltered = when (selectedTab) {
-            1 -> datedRecordings.filter { it.localDate == today }
-            2 -> datedRecordings.filter { !it.item.isCompleted }
-            else -> datedRecordings
+            0 -> datedRecordings.filter { it.localDate == today }
+            1 -> datedRecordings.filter { !it.item.isCompleted }
+            else -> emptyList()
         }
 
         val dateFiltered = selectedDate?.let { date ->
@@ -211,8 +210,8 @@ fun TasksScreen(
     var isRefreshing by remember { mutableStateOf(false) }
     val tasksListState = rememberLazyListState()
 
-    LaunchedEffect(filteredRecordings.size, selectedDate, normalizedQuery, calendarPinnedByUser) {
-        if (!calendarPinnedByUser) {
+    LaunchedEffect(filteredRecordings.size, selectedDate, normalizedQuery, selectedTab) {
+        if (selectedTab == 1) {
             calendarCollapsed = selectedDate != null ||
                 (normalizedQuery.isBlank() && filteredRecordings.size <= 3)
         }
@@ -232,6 +231,24 @@ fun TasksScreen(
         }
     }
 
+    LaunchedEffect(tasksListState, calendarCollapsed, selectedTab) {
+        if (selectedTab == 1) {
+            var lastIndex = tasksListState.firstVisibleItemIndex
+            var lastOffset = tasksListState.firstVisibleItemScrollOffset
+
+            snapshotFlow { tasksListState.firstVisibleItemIndex to tasksListState.firstVisibleItemScrollOffset }
+                .collectLatest { (index, offset) ->
+                    val scrollingTowardTasks = index > lastIndex || (index == lastIndex && offset > lastOffset)
+                    lastIndex = index
+                    lastOffset = offset
+
+                    if (scrollingTowardTasks && !calendarCollapsed) {
+                        calendarCollapsed = true
+                    }
+                }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -242,14 +259,7 @@ fun TasksScreen(
                 onRefresh = { isRefreshing = true }
             )
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(250.dp)
-                .clip(RoundedCornerShape(bottomStart = 36.dp, bottomEnd = 36.dp))
-                .background(Brush.linearGradient(listOf(heroStart, heroEnd)))
-        )
-
+        
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -333,51 +343,51 @@ fun TasksScreen(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                TasksCalendarCard(
-                    visibleMonth = visibleMonth,
-                    selectedDate = selectedDate,
-                    collapsed = calendarCollapsed,
-                    onToggleCollapsed = {
-                        calendarPinnedByUser = true
-                        calendarCollapsed = !calendarCollapsed
-                    },
-                    recordingsByDate = recordingsByDate,
-                    cardColor = cardColor,
-                    primaryTextColor = primaryTextColor,
-                    accentColor = accentColor,
-                    mutedTextColor = mutedTextColor,
-                    secondaryTextColor = secondaryTextColor,
-                    accentSoftColor = accentSoftColor,
-                    cellBgColor = cellBgColor,
-                    todayTextColor = todayTextColor,
-                    onPrevMonth = { visibleMonth = visibleMonth.minusMonths(1) },
-                    onNextMonth = { visibleMonth = visibleMonth.plusMonths(1) },
-                    onJumpToToday = {
-                        visibleMonth = YearMonth.now()
-                        selectedDate = LocalDate.now()
-                    },
-                    onDateSelected = { clicked ->
-                        selectedDate = clicked
-                        calendarCollapsed = true
-                        calendarPinnedByUser = true
-                        showDayEventsDialog = true
-                        dayEventsLoading = true
-                        dayEventsError = null
-                        dayEvents = emptyList()
-                        scope.launch {
-                            onGetEventsForDay(clicked)
-                                .onSuccess { events ->
-                                    dayEvents = events
-                                }
-                                .onFailure { error ->
-                                    dayEventsError = error.message ?: "Failed to load events"
-                                }
-                            dayEventsLoading = false
+                if (selectedTab == 1) {
+                    TasksCalendarCard(
+                        visibleMonth = visibleMonth,
+                        selectedDate = selectedDate,
+                        collapsed = calendarCollapsed,
+                        onToggleCollapsed = {
+                            calendarCollapsed = !calendarCollapsed
+                        },
+                        recordingsByDate = recordingsByDate,
+                        cardColor = cardColor,
+                        primaryTextColor = primaryTextColor,
+                        accentColor = accentColor,
+                        mutedTextColor = mutedTextColor,
+                        secondaryTextColor = secondaryTextColor,
+                        accentSoftColor = accentSoftColor,
+                        cellBgColor = cellBgColor,
+                        todayTextColor = todayTextColor,
+                        onPrevMonth = { visibleMonth = visibleMonth.minusMonths(1) },
+                        onNextMonth = { visibleMonth = visibleMonth.plusMonths(1) },
+                        onJumpToToday = {
+                            visibleMonth = YearMonth.now()
+                            selectedDate = LocalDate.now()
+                        },
+                        onDateSelected = { clicked ->
+                            selectedDate = clicked
+                            calendarCollapsed = true
+                            showDayEventsDialog = true
+                            dayEventsLoading = true
+                            dayEventsError = null
+                            dayEvents = emptyList()
+                            scope.launch {
+                                onGetEventsForDay(clicked)
+                                    .onSuccess { events ->
+                                        dayEvents = events
+                                    }
+                                    .onFailure { error ->
+                                        dayEventsError = error.message ?: "Failed to load events"
+                                    }
+                                dayEventsLoading = false
+                            }
                         }
-                    }
-                )
+                    )
+                }
 
-                AnimatedVisibility(visible = selectedDate != null) {
+                if (selectedTab == 1) AnimatedVisibility(visible = selectedDate != null) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -399,7 +409,7 @@ fun TasksScreen(
                     }
                 }
 
-                AnimatedVisibility(visible = selectedDate != null) {
+                if (selectedTab == 1) AnimatedVisibility(visible = selectedDate != null) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -412,31 +422,7 @@ fun TasksScreen(
                     }
                 }
 
-                Spacer(Modifier.height(Dimens.SpacingMd))
-                AnimatedVisibility(visible = showLongPressTip) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Tip: Long-press a task to see full details",
-                            color = mutedTextColor,
-                            fontSize = 12.sp
-                        )
-                        Text(
-                            text = "Got it",
-                            color = accentColor,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.clickable {
-                                showLongPressTip = false
-                                appPrefs.edit().putBoolean("tasks_long_press_tip_seen", true).apply()
-                            }
-                        )
-                    }
-                }
-                Spacer(Modifier.height(Dimens.SpacingSm))
+                Spacer(Modifier.height(Dimens.SpacingMd + Dimens.SpacingSm))
 
                 if (isLoading) {
                     ShimmerTaskList(count = 4)
@@ -456,13 +442,7 @@ fun TasksScreen(
                                     searchQuery = normalizedQuery,
                                     useTasksStyle = true,
                                     isDarkMode = isDarkMode,
-                                    onCardLongClick = {
-                                        selectedTaskForDetails = it
-                                        if (showLongPressTip) {
-                                            showLongPressTip = false
-                                            appPrefs.edit().putBoolean("tasks_long_press_tip_seen", true).apply()
-                                        }
-                                    }
+                                    onCardClick = { selectedTaskForDetails = it }
                                 )
                             }
                         }
@@ -484,8 +464,8 @@ fun TasksScreen(
                         Text(
                             text = when {
                                 normalizedQuery.isNotBlank() -> "No matching tasks"
-                                selectedTab == 1 -> "No tasks today"
-                                selectedTab == 2 -> "All caught up!"
+                                selectedTab == 0 -> "No tasks today"
+                                selectedTab == 1 -> "All caught up!"
                                 selectedDate != null -> "No tasks for selected date"
                                 else -> "No tasks yet"
                             },
@@ -496,8 +476,8 @@ fun TasksScreen(
                         Text(
                             text = when {
                                 normalizedQuery.isNotBlank() -> "Try a different search term"
-                                selectedTab == 1 -> "Tasks created today will appear here"
-                                selectedTab == 2 -> "No pending tasks remaining"
+                                selectedTab == 0 -> "Tasks created today will appear here"
+                                selectedTab == 1 -> "No pending tasks remaining"
                                 selectedDate != null -> "Tap another date in calendar"
                                 else -> "Use voice to create tasks"
                             },
@@ -518,31 +498,116 @@ fun TasksScreen(
         )
     }
 
-    if (showAddEventDialog && selectedDate != null) {
+    if (selectedTab == 1 && showAddEventDialog && selectedDate != null) {
+        val hourOptions = remember { (1..12).map { it.toString().padStart(2, '0') } }
+        val minuteOptions = remember { (0..59).map { it.toString().padStart(2, '0') } }
+        val amPmOptions = remember { listOf("AM", "PM") }
+        val initialTimePicker = remember(showAddEventDialog, eventTime) {
+            parseTimeForPicker(eventTime)
+        }
+
+        var selectedHourIndex by remember(showAddEventDialog) {
+            mutableStateOf((initialTimePicker.hour12 - 1).coerceIn(0, 11))
+        }
+        var selectedMinuteIndex by remember(showAddEventDialog) {
+            mutableStateOf(initialTimePicker.minute.coerceIn(0, 59))
+        }
+        var selectedAmPmIndex by remember(showAddEventDialog) {
+            mutableStateOf(if (initialTimePicker.isPm) 1 else 0)
+        }
+
         AlertDialog(
             onDismissRequest = { showAddEventDialog = false },
-            title = { Text("Add Event", color = primaryTextColor) },
+            title = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Add Event",
+                        color = primaryTextColor,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = selectedDate!!.format(DateTimeFormatter.ofPattern("EEE, dd MMM yyyy")),
+                        color = accentColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
                         value = eventTitle,
                         onValueChange = { eventTitle = it },
                         singleLine = true,
-                        label = { Text("Title") }
+                        label = { Text("Event title") },
+                        modifier = Modifier.fillMaxWidth()
                     )
-                    OutlinedTextField(
-                        value = eventTime,
-                        onValueChange = {
-                            eventTime = it.filter { c -> c.isDigit() || c == ':' }.take(5)
-                        },
-                        singleLine = true,
-                        label = { Text("Time (HH:mm)") }
-                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(cellBgColor.copy(alpha = 0.65f))
+                            .padding(12.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                text = "Select time",
+                                color = primaryTextColor,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "${hourOptions[selectedHourIndex]}:${minuteOptions[selectedMinuteIndex]} ${amPmOptions[selectedAmPmIndex]}",
+                                color = accentColor,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                TimeWheelPickerColumn(
+                                    options = hourOptions,
+                                    selectedIndex = selectedHourIndex,
+                                    onSelectedIndexChange = { selectedHourIndex = it },
+                                    activeTextColor = accentColor,
+                                    inactiveTextColor = mutedTextColor,
+                                    highlightColor = accentSoftColor,
+                                    resetKey = showAddEventDialog,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TimeWheelPickerColumn(
+                                    options = minuteOptions,
+                                    selectedIndex = selectedMinuteIndex,
+                                    onSelectedIndexChange = { selectedMinuteIndex = it },
+                                    activeTextColor = accentColor,
+                                    inactiveTextColor = mutedTextColor,
+                                    highlightColor = accentSoftColor,
+                                    resetKey = showAddEventDialog,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TimeWheelPickerColumn(
+                                    options = amPmOptions,
+                                    selectedIndex = selectedAmPmIndex,
+                                    onSelectedIndexChange = { selectedAmPmIndex = it },
+                                    activeTextColor = accentColor,
+                                    inactiveTextColor = mutedTextColor,
+                                    highlightColor = accentSoftColor,
+                                    resetKey = showAddEventDialog,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+
                     OutlinedTextField(
                         value = eventNotes,
                         onValueChange = { eventNotes = it },
-                        label = { Text("Notes") }
+                        label = { Text("Notes") },
+                        modifier = Modifier.fillMaxWidth()
                     )
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -572,11 +637,11 @@ fun TasksScreen(
                 TextButton(
                     onClick = {
                         if (eventTitle.trim().isNotEmpty()) {
-                            val normalizedTime = try {
-                                LocalTime.parse(eventTime).toString().take(5)
-                            } catch (_: Exception) {
-                                "09:00"
-                            }
+                            val normalizedTime = to24HourString(
+                                hour12 = selectedHourIndex + 1,
+                                minute = selectedMinuteIndex,
+                                isPm = selectedAmPmIndex == 1
+                            )
                             onAddEvent(
                                 selectedDate!!,
                                 eventTitle.trim(),
@@ -589,7 +654,7 @@ fun TasksScreen(
                                 }
                             )
                             eventTitle = ""
-                            eventTime = "09:00"
+                            eventTime = normalizedTime
                             eventNotes = ""
                             syncToDeviceCalendar = false
                             showAddEventDialog = false
@@ -606,7 +671,7 @@ fun TasksScreen(
         )
     }
 
-    if (showDayEventsDialog && selectedDate != null) {
+    if (selectedTab == 1 && showDayEventsDialog && selectedDate != null) {
         AlertDialog(
             onDismissRequest = { showDayEventsDialog = false },
             title = {
@@ -690,7 +755,7 @@ fun TasksScreen(
         )
     }
 
-    if (noteTargetEvent != null) {
+    if (selectedTab == 1 && noteTargetEvent != null) {
         AlertDialog(
             onDismissRequest = {
                 if (!savingNote) {
@@ -774,6 +839,114 @@ fun TasksScreen(
                 selectedTaskForDetails = item.copy(text = updatedText)
             }
         )
+    }
+}
+
+private data class TimePickerState(
+    val hour12: Int,
+    val minute: Int,
+    val isPm: Boolean
+)
+
+private fun parseTimeForPicker(value: String): TimePickerState {
+    val parsed = try {
+        LocalTime.parse(value)
+    } catch (_: Exception) {
+        LocalTime.of(9, 0)
+    }
+    val hour = parsed.hour
+    val hour12 = when {
+        hour == 0 -> 12
+        hour > 12 -> hour - 12
+        else -> hour
+    }
+    return TimePickerState(
+        hour12 = hour12,
+        minute = parsed.minute,
+        isPm = hour >= 12
+    )
+}
+
+private fun to24HourString(hour12: Int, minute: Int, isPm: Boolean): String {
+    val normalizedHour12 = hour12.coerceIn(1, 12)
+    val hour24 = when {
+        isPm && normalizedHour12 != 12 -> normalizedHour12 + 12
+        !isPm && normalizedHour12 == 12 -> 0
+        else -> normalizedHour12
+    }
+    return String.format(Locale.US, "%02d:%02d", hour24, minute.coerceIn(0, 59))
+}
+
+@Composable
+private fun TimeWheelPickerColumn(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelectedIndexChange: (Int) -> Unit,
+    activeTextColor: Color,
+    inactiveTextColor: Color,
+    highlightColor: Color,
+    resetKey: Any?,
+    modifier: Modifier = Modifier
+) {
+    val paddedOptions = remember(options) { listOf("", "") + options + listOf("", "") }
+    val listState = rememberLazyListState()
+    val cellHeight = 34.dp
+
+    LaunchedEffect(resetKey, options) {
+        listState.scrollToItem((selectedIndex + 2).coerceIn(0, paddedOptions.lastIndex))
+    }
+
+    LaunchedEffect(listState, options) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collectLatest { (index, offset) ->
+                val centered = (index + if (offset > 16) 3 else 2)
+                    .coerceIn(2, paddedOptions.lastIndex - 2) - 2
+                if (centered != selectedIndex) {
+                    onSelectedIndexChange(centered)
+                }
+            }
+    }
+
+    Box(
+        modifier = modifier
+            .height(170.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(TasksCellBg.copy(alpha = 0.55f))
+    ) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            itemsIndexed(paddedOptions) { index, value ->
+                val isRealItem = index in 2..(paddedOptions.lastIndex - 2)
+                val optionIndex = index - 2
+                val isSelected = isRealItem && optionIndex == selectedIndex
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(cellHeight * 1.6f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (isSelected) highlightColor else Color.Transparent
+                        )
+                        .clickable(enabled = isRealItem) {
+                            if (isRealItem) {
+                                onSelectedIndexChange(optionIndex)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = value,
+                        color = if (isSelected) activeTextColor else inactiveTextColor,
+                        fontSize = if (isSelected) 16.sp else 14.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            }
+        }
     }
 }
 

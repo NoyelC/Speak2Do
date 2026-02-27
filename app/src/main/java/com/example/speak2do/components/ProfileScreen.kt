@@ -27,7 +27,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.ExitToApp
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.NotificationsActive
@@ -194,10 +197,6 @@ fun ProfileScreen(
                         userName = userName,
                         profileImageUri = profileImageUri,
                         onOpenPhotoOptions = { showPhotoOptionsDialog = true },
-                        onEditName = {
-                            editableName = userName
-                            showEditNameDialog = true
-                        },
                         isDarkMode = isDarkMode,
                         primaryText = primaryText,
                         secondaryText = secondaryText
@@ -311,38 +310,51 @@ fun ProfileScreen(
                 )
             },
             text = {
-                Text(
-                    "Choose an action",
-                    color = if (isDarkMode) Color(0xA6FFFFFF) else Color(0xFF49617D)
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showPhotoOptionsDialog = false
-                        onPickImage()
-                    }
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Set profile photo")
-                }
-            },
-            dismissButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (profileImageUri != null) {
-                        TextButton(
+                    Text(
+                        "Choose an action",
+                        color = if (isDarkMode) Color(0xA6FFFFFF) else Color(0xFF49617D)
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        PhotoOptionTile(
+                            modifier = Modifier.weight(1f),
+                            label = "Set profile photo",
+                            icon = Icons.Rounded.CameraAlt,
+                            isDarkMode = isDarkMode,
+                            onClick = {
+                                showPhotoOptionsDialog = false
+                                onPickImage()
+                            }
+                        )
+                        PhotoOptionTile(
+                            modifier = Modifier.weight(1f),
+                            label = "Remove photo",
+                            icon = Icons.Rounded.Delete,
+                            isDarkMode = isDarkMode,
+                            enabled = profileImageUri != null,
                             onClick = {
                                 showPhotoOptionsDialog = false
                                 showRemovePhotoDialog = true
                             }
-                        ) {
-                            Text("Remove photo")
-                        }
+                        )
                     }
-                    TextButton(onClick = { showPhotoOptionsDialog = false }) {
-                        Text("Cancel")
-                    }
+                    PhotoOptionTile(
+                        modifier = Modifier.fillMaxWidth(),
+                        label = "Cancel",
+                        icon = Icons.Rounded.Close,
+                        isDarkMode = isDarkMode,
+                        onClick = { showPhotoOptionsDialog = false }
+                    )
                 }
             },
+            confirmButton = {},
+            dismissButton = {},
             containerColor = if (isDarkMode) CardNavy else LightCard
         )
     }
@@ -418,12 +430,50 @@ fun ProfileScreen(
 }
 
 @Composable
+private fun PhotoOptionTile(
+    modifier: Modifier,
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isDarkMode: Boolean,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    val bg = if (isDarkMode) Color(0xFF152949) else Color(0xFFF1F6FF)
+    val border = if (isDarkMode) Color(0x336DD5FF) else Color(0x33447FCC)
+    val textColor = if (enabled) {
+        if (isDarkMode) Color.White else Color(0xFF17345B)
+    } else {
+        if (isDarkMode) Color(0x66FFFFFF) else Color(0x6649617D)
+    }
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(bg)
+            .border(1.dp, border, RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp)
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(imageVector = icon, contentDescription = null, tint = textColor)
+            Text(
+                text = label,
+                color = textColor,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+@Composable
 private fun ProfileHeroCard(
     recordings: List<RecordingItem>,
     userName: String,
     profileImageUri: Uri?,
     onOpenPhotoOptions: () -> Unit,
-    onEditName: () -> Unit,
     isDarkMode: Boolean,
     primaryText: Color,
     secondaryText: Color
@@ -490,30 +540,6 @@ private fun ProfileHeroCard(
                 color = secondaryText,
                 style = MaterialTheme.typography.bodyMedium
             )
-            Spacer(modifier = Modifier.size(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                TextButton(
-                    onClick = onOpenPhotoOptions,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = "Profile photo",
-                        color = if (isDarkMode) Color(0xFF7DD7EC) else Color(0xFF2E77D0),
-                    )
-                }
-                TextButton(
-                    onClick = onEditName,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = "Edit name",
-                        color = secondaryText
-                    )
-                }
-            }
         }
     }
 }

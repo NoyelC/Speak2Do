@@ -21,12 +21,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Assignment
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Pending
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -52,9 +54,9 @@ import com.example.speak2do.ui.theme.Dimens
 import com.example.speak2do.ui.theme.MutedText
 import com.example.speak2do.ui.theme.PrimaryCyan
 
-private val StatsScreenNavy = Color(0xFF050B18)
-private val StatsDeepNavy = Color(0xFF001A3D)
-private val StatsAccentBlue = Color(0xFF2E8BFF)
+private val StatsScreenNavy = Color(0xFF0A1224)
+private val StatsDeepNavy = Color(0xFF1B2B4B)
+private val StatsAccentBlue = Color(0xFF3FB6D3)
 private val StatsGlassBg = Color(0x1AFFFFFF)
 private val StatsGlassBorder = Color(0x44FFFFFF)
 private val StatsCardNavy = Color(0xFF102241)
@@ -435,16 +437,26 @@ private fun RecentActivityCard(
 
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(statusColor.copy(alpha = 0.18f))
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(if (item.isCompleted) statusColor else Color.Transparent, CircleShape)
+                        .border(
+                            BorderStroke(
+                                width = 2.dp,
+                                color = if (item.isCompleted) statusColor else if (isDarkMode) Color(0x55FFFFFF) else Color(0x558AB6FF)
+                            ),
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = statusText.uppercase(),
-                        color = statusColor,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    if (item.isCompleted) {
+                        Icon(
+                            imageVector = Icons.Rounded.Check,
+                            contentDescription = null,
+                            tint = if (isDarkMode) Color.White else Color(0xFF0F2744),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 

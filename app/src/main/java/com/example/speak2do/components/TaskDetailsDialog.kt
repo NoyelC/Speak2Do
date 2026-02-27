@@ -3,11 +3,11 @@ package com.example.speak2do.components
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -24,7 +24,6 @@ import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
@@ -45,6 +44,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.speak2do.model.RecordingItem
 
 @Composable
@@ -65,7 +66,8 @@ fun TaskDetailsDialog(
     var subtasks by remember(item.id) { mutableStateOf(parsed.subtasks) }
     var newSubtask by remember(item.id) { mutableStateOf("") }
 
-    val containerColor = if (isDarkMode) androidx.compose.ui.graphics.Color(0xFF131D31) else androidx.compose.ui.graphics.Color(0xFFF0F6FF)
+    val pageBg = if (isDarkMode) androidx.compose.ui.graphics.Color(0xFF0D1628) else androidx.compose.ui.graphics.Color(0xFFF3F7FF)
+    val panelColor = if (isDarkMode) androidx.compose.ui.graphics.Color(0xFF13233A) else androidx.compose.ui.graphics.Color(0xFFFFFFFF)
     val cardColor = if (isDarkMode) androidx.compose.ui.graphics.Color(0xFF1A2943) else androidx.compose.ui.graphics.Color(0xFFFFFFFF)
     val borderColor = if (isDarkMode) androidx.compose.ui.graphics.Color(0x33A6C6FF) else androidx.compose.ui.graphics.Color(0x336D98D8)
     val primaryTextColor = if (isDarkMode) androidx.compose.ui.graphics.Color(0xFFFFFFFF) else androidx.compose.ui.graphics.Color(0xFF0E2746)
@@ -81,40 +83,52 @@ fun TaskDetailsDialog(
         append("Status: ${if (item.isCompleted) "Completed" else "Pending"}")
     }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = {
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(pageBg)
+                .padding(14.dp)
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(panelColor, RoundedCornerShape(16.dp))
+                    .border(1.dp, borderColor, RoundedCornerShape(16.dp))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = title,
-                    color = primaryTextColor,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
-                )
-                Box(
-                    modifier = Modifier
-                        .background(accentColor.copy(alpha = 0.15f), RoundedCornerShape(999.dp))
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        color = primaryTextColor,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 21.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     Text(
                         text = if (item.isCompleted) "Completed" else "Pending",
                         color = accentColor,
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Close", tint = primaryTextColor)
+                }
             }
-        },
-        text = {
+
             Column(
                 modifier = Modifier
-                    .heightIn(max = 460.dp)
+                    .fillMaxSize()
+                    .padding(top = 10.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -132,45 +146,50 @@ fun TaskDetailsDialog(
                         )
 
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            if (onEditTask != null) {
-                                TopActionButton(
-                                    label = if (isEditing) "Save Edit" else "Edit",
-                                    icon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
-                                    onClick = {
-                                        if (isEditing) {
-                                            val normalized = mainText.trim()
-                                            if (normalized.isNotBlank()) {
-                                                mainText = normalized
-                                                onEditTask(item, currentTaskText())
-                                                isEditing = false
-                                            }
-                                        } else {
-                                            isEditing = true
+                            ActionButton(
+                                modifier = Modifier.weight(1f),
+                                label = if (isEditing) "Save Edit" else "Edit",
+                                icon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
+                                onClick = {
+                                    if (onEditTask == null) return@ActionButton
+                                    if (isEditing) {
+                                        val normalized = mainText.trim()
+                                        if (normalized.isNotBlank()) {
+                                            mainText = normalized
+                                            onEditTask(item, currentTaskText())
+                                            isEditing = false
                                         }
+                                    } else {
+                                        isEditing = true
                                     }
-                                )
-                            }
+                                },
+                                enabled = onEditTask != null
+                            )
+                            ActionButton(
+                                modifier = Modifier.weight(1f),
+                                label = "Mark Complete",
+                                icon = { Icon(Icons.Rounded.CheckCircle, contentDescription = null) },
+                                onClick = { onMarkComplete?.invoke(item) },
+                                enabled = onMarkComplete != null && !item.isCompleted
+                            )
+                        }
 
-                            if (onMarkComplete != null && !item.isCompleted) {
-                                TopActionButton(
-                                    label = "Mark Complete",
-                                    icon = { Icon(Icons.Rounded.CheckCircle, contentDescription = null) },
-                                    onClick = { onMarkComplete(item) }
-                                )
-                            }
-
-                            TopActionButton(
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ActionButton(
+                                modifier = Modifier.weight(1f),
                                 label = "Copy",
                                 icon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },
                                 onClick = { clipboardManager.setText(AnnotatedString(shareText)) }
                             )
 
-                            TopActionButton(
+                            ActionButton(
+                                modifier = Modifier.weight(1f),
                                 label = "Share",
                                 icon = { Icon(Icons.Rounded.Share, contentDescription = null) },
                                 onClick = {
@@ -184,9 +203,15 @@ fun TaskDetailsDialog(
                                     )
                                 }
                             )
+                        }
 
-                            if (isEditing) {
-                                TopActionButton(
+                        if (isEditing) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                ActionButton(
+                                    modifier = Modifier.weight(1f),
                                     label = "Cancel",
                                     icon = { Icon(Icons.Rounded.Close, contentDescription = null) },
                                     onClick = {
@@ -194,6 +219,7 @@ fun TaskDetailsDialog(
                                         mainText = parsed.mainText
                                     }
                                 )
+                                SpacerCell(modifier = Modifier.weight(1f))
                             }
                         }
                     }
@@ -227,13 +253,53 @@ fun TaskDetailsDialog(
                                 color = primaryTextColor,
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                maxLines = 5,
+                                maxLines = 6,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
 
-                        InfoRow("Time", item.dateTime, secondaryTextColor, primaryTextColor)
-                        InfoRow("Category", item.duration, secondaryTextColor, primaryTextColor)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            InfoGridCell(
+                                modifier = Modifier.weight(1f),
+                                label = "Time",
+                                value = item.dateTime,
+                                labelColor = secondaryTextColor,
+                                valueColor = primaryTextColor,
+                                borderColor = borderColor
+                            )
+                            InfoGridCell(
+                                modifier = Modifier.weight(1f),
+                                label = "Category",
+                                value = item.duration,
+                                labelColor = secondaryTextColor,
+                                valueColor = primaryTextColor,
+                                borderColor = borderColor
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            InfoGridCell(
+                                modifier = Modifier.weight(1f),
+                                label = "Status",
+                                value = if (item.isCompleted) "Completed" else "Pending",
+                                labelColor = secondaryTextColor,
+                                valueColor = accentColor,
+                                borderColor = borderColor
+                            )
+                            InfoGridCell(
+                                modifier = Modifier.weight(1f),
+                                label = "Sub-tasks",
+                                value = subtasks.size.toString(),
+                                labelColor = secondaryTextColor,
+                                valueColor = primaryTextColor,
+                                borderColor = borderColor
+                            )
+                        }
                     }
                 }
 
@@ -241,35 +307,18 @@ fun TaskDetailsDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(min = 140.dp)
                             .background(cardColor, RoundedCornerShape(16.dp))
                             .border(1.dp, borderColor, RoundedCornerShape(16.dp))
                             .padding(12.dp)
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Sub-tasks",
-                                    color = secondaryTextColor,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .background(accentColor.copy(alpha = 0.15f), RoundedCornerShape(999.dp))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                                ) {
-                                    Text(
-                                        text = subtasks.size.toString(),
-                                        color = accentColor,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
+                            Text(
+                                text = "Sub-tasks",
+                                color = secondaryTextColor,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
 
                             if (subtasks.isEmpty()) {
                                 Text(
@@ -305,7 +354,7 @@ fun TaskDetailsDialog(
                                             subtasks = subtasks.toMutableList().also { it.removeAt(index) }
                                             onEditTask(item, currentTaskText())
                                         },
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(20.dp)
                                     ) {
                                         Icon(Icons.Rounded.Delete, contentDescription = "Delete sub-task")
                                     }
@@ -340,49 +389,32 @@ fun TaskDetailsDialog(
                         }
                     }
                 }
+
+                /*Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(text = "Close", color = accentColor)
+                    }
+                }*/
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = "Close", color = accentColor)
-            }
-        },
-        containerColor = containerColor
-    )
+        }
+    }
 }
 
 @Composable
-private fun InfoRow(
-    label: String,
-    value: String,
-    labelColor: androidx.compose.ui.graphics.Color,
-    valueColor: androidx.compose.ui.graphics.Color
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, color = labelColor, fontSize = 12.sp)
-        Text(
-            text = value,
-            color = valueColor,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-@Composable
-private fun TopActionButton(
+private fun ActionButton(
+    modifier: Modifier,
     label: String,
     icon: @Composable () -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    enabled: Boolean = true
 ) {
     OutlinedButton(
         onClick = onClick,
-        modifier = Modifier.width(128.dp)
+        modifier = modifier,
+        enabled = enabled
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -397,6 +429,38 @@ private fun TopActionButton(
             )
         }
     }
+}
+
+@Composable
+private fun InfoGridCell(
+    modifier: Modifier,
+    label: String,
+    value: String,
+    labelColor: androidx.compose.ui.graphics.Color,
+    valueColor: androidx.compose.ui.graphics.Color,
+    borderColor: androidx.compose.ui.graphics.Color
+) {
+    Column(
+        modifier = modifier
+            .border(1.dp, borderColor, RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(text = label, color = labelColor, fontSize = 11.sp)
+        Text(
+            text = value,
+            color = valueColor,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun SpacerCell(modifier: Modifier = Modifier) {
+    Box(modifier = modifier)
 }
 
 private data class ParsedTaskText(

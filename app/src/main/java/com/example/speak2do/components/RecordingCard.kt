@@ -6,12 +6,38 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccessTime
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material3.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -20,10 +46,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -34,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.speak2do.model.RecordingItem
 import com.example.speak2do.ui.theme.*
+import org.intellij.lang.annotations.JdkConstants
 
 private val TasksCardBg = Color(0xCC1A1F3A)
 private val TasksCardBgDone = Color(0xCC222945)
@@ -143,24 +170,6 @@ fun RecordingCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Checkbox(
-                    checked = item.isCompleted,
-                    onCheckedChange = { onToggleCompleted(item.id, item.isCompleted) },
-                    colors = CheckboxDefaults.colors(
-                        checkedColor = SuccessGreen,
-                        uncheckedColor = if (useTasksStyle) tasksTextMuted else BaseTextMuted,
-                        checkmarkColor = if (useTasksStyle) tasksTextPrimary else BaseTextPrimary
-                    ),
-                    modifier = Modifier
-                        .size(Dimens.MinTouchTarget)
-                        .scale(checkboxScale)
-                        .semantics {
-                            contentDescription = if (item.isCompleted) "Mark as incomplete" else "Mark as complete"
-                        }
-                )
-
-                Spacer(Modifier.width(6.dp))
-
                 // Highlighted search text
                 if (searchQuery.isNotBlank() && item.text.contains(searchQuery, ignoreCase = true)) {
                     HighlightedText(
@@ -238,6 +247,27 @@ fun RecordingCard(
                 )
             }
         }
+
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(end = Dimens.SpacingLg),
+            contentAlignment = Alignment.Center
+        ) {
+            RoundCheck(
+                checked = item.isCompleted,
+                onToggle = { onToggleCompleted(item.id, item.isCompleted) },
+                checkedColor = SuccessGreen,
+                borderColor = if (useTasksStyle) tasksTextMuted else BaseTextMuted,
+                checkmarkColor = if (useTasksStyle) tasksTextPrimary else BaseTextPrimary,
+                modifier = Modifier
+                    .size(if (useTasksStyle) 36.dp else Dimens.MinTouchTarget)
+                    .scale(checkboxScale)
+                    .semantics {
+                        contentDescription = if (item.isCompleted) "Mark as incomplete" else "Mark as complete"
+                    }
+            )
+        }
     }
 }
 
@@ -294,6 +324,42 @@ fun HighlightedText(
     )
 }
 
+@Composable
+private fun RoundCheck(
+    checked: Boolean,
+    onToggle: () -> Unit,
+    checkedColor: Color,
+    borderColor: Color,
+    checkmarkColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(if (checked) checkedColor else Color.Transparent, CircleShape)
+            .border(
+                width = 2.dp,
+                color = if (checked) checkedColor else borderColor.copy(alpha = 0.8f),
+                shape = CircleShape
+            )
+            .padding(8.dp)
+            .semantics {
+                contentDescription = if (checked) "Checked" else "Unchecked"
+            }
+            .let { it.clickable { onToggle() } },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (checked) {
+            Icon(
+                imageVector = Icons.Rounded.Check,
+                contentDescription = null,
+                tint = checkmarkColor,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SwipeableRecordingCard(
@@ -332,39 +398,13 @@ fun SwipeableRecordingCard(
                 label = "swipeBg"
             )
 
-            val iconScale by animateFloatAsState(
-                targetValue = if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) 1.2f else 0.8f,
-                animationSpec = tween(200),
-                label = "deleteIconScale"
-            )
-
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(RoundedCornerShape(Dimens.CardCornerRadius))
                     .background(color)
-                    .padding(end = 24.dp),
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        Icons.Rounded.Delete,
-                        contentDescription = "Delete task",
-                        tint = WhiteText,
-                        modifier = Modifier
-                            .size(Dimens.IconSizeLg)
-                            .scale(iconScale)
-                    )
-                    Text(
-                        text = "Delete",
-                        color = WhiteText.copy(alpha = 0.8f),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
+                    .padding(end = 24.dp)
+            )
         },
         enableDismissFromStartToEnd = false,
         enableDismissFromEndToStart = true

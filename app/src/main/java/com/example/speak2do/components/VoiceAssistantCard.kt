@@ -9,16 +9,18 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -96,7 +99,7 @@ fun VoiceAssistantCard(
                 Brush.linearGradient(listOf(cardStart, cardEnd)),
                 RoundedCornerShape(Dimens.CardCornerRadius + 8.dp)
             )
-            .padding(horizontal = Dimens.SpacingLg, vertical = Dimens.SpacingLg)
+            .padding(horizontal = Dimens.SpacingLg, vertical = Dimens.SpacingMd)
             .semantics { contentDescription = "Voice assistant card" },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -148,14 +151,23 @@ fun VoiceAssistantCard(
             }
         }
 
-        Spacer(Modifier.height(Dimens.SpacingLg))
+        Spacer(Modifier.height(Dimens.SpacingMd))
 
-        SiriWaveform(isRecording, voiceLevel, isDarkMode = isDarkMode)
+        SiriWaveform(
+            isRecording = isRecording,
+            voiceLevel = voiceLevel,
+            isDarkMode = isDarkMode,
+            barCount = 14,
+            barWidth = 5.dp,
+            barSpacing = 3.dp,
+            maxBarHeight = 44.dp,
+            minBarHeight = 8.dp
+        )
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(26.dp),
+                .height(18.dp),
             contentAlignment = Alignment.Center
         ) {
 
@@ -183,7 +195,7 @@ fun VoiceAssistantCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(34.dp),
+                .height(28.dp),
             contentAlignment = Alignment.Center
         ) {
             androidx.compose.animation.AnimatedVisibility(
@@ -195,7 +207,7 @@ fun VoiceAssistantCard(
             }
         }
 
-        Spacer(Modifier.height(Dimens.SpacingMd))
+        Spacer(Modifier.height(Dimens.SpacingSm))
 
         if (isRecording) {
             Row(
@@ -216,7 +228,7 @@ fun VoiceAssistantCard(
                             shape = RoundedCornerShape(Dimens.ButtonCornerRadius)
                         )
                         .clickable { onCancelRecording() }
-                        .padding(vertical = 14.dp)
+                        .padding(vertical = 12.dp)
                         .semantics { contentDescription = "Stop recording" },
                     contentAlignment = Alignment.Center
                 ) {
@@ -232,7 +244,7 @@ fun VoiceAssistantCard(
                         .weight(1f)
                         .clip(RoundedCornerShape(Dimens.ButtonCornerRadius))
                         .background(if (isDarkMode) WhiteText.copy(alpha = 0.1f) else Color(0x14183A62))
-                        .padding(vertical = 14.dp),
+                        .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -262,6 +274,16 @@ fun VoiceAssistantCard(
                 }
             }
         } else {
+            val tapIntentModifier = Modifier.pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitFirstDown()
+                        onMicClick()
+                        waitForUpOrCancellation()
+                    }
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -272,8 +294,8 @@ fun VoiceAssistantCard(
                         brush = Brush.linearGradient(listOf(controlBorderA, controlBorderB)),
                         shape = RoundedCornerShape(Dimens.ButtonCornerRadius)
                     )
-                    .clickable { onMicClick() }
-                    .padding(vertical = 14.dp)
+                    .then(tapIntentModifier)
+                    .padding(vertical = 12.dp)
                     .semantics { contentDescription = "Tap to start recording" },
                 contentAlignment = Alignment.Center
             ) {
